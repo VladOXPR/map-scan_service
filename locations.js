@@ -21,7 +21,9 @@ const locationManager = {
                     id: station.id,
                     name: station.title,
                     coordinates: [parseFloat(station.longitude), parseFloat(station.latitude)],
-                    updated_at: station.updated_at
+                    updated_at: station.updated_at,
+                    filled_slots: station.filled_slots !== undefined ? parseInt(station.filled_slots) : null,
+                    open_slots: station.open_slots !== undefined ? parseInt(station.open_slots) : null
                 }));
             }
             return [];
@@ -52,7 +54,9 @@ const locationManager = {
                     id: station.id,
                     name: station.title,
                     coordinates: [parseFloat(station.longitude), parseFloat(station.latitude)],
-                    updated_at: station.updated_at
+                    updated_at: station.updated_at,
+                    filled_slots: station.filled_slots !== undefined ? parseInt(station.filled_slots) : null,
+                    open_slots: station.open_slots !== undefined ? parseInt(station.open_slots) : null
                 };
             }
             return null;

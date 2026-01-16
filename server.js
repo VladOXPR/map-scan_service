@@ -137,6 +137,14 @@ app.get('/api/stations', async (req, res) => {
         const stations = stationsData.map(stationData => {
             const stationInfo = stationInfoMap[stationData.id];
             
+            // Use filled_slots and open_slots from external API if available, otherwise fall back to supplier API data
+            const occupied = stationInfo?.filled_slots !== null && stationInfo?.filled_slots !== undefined 
+                ? stationInfo.filled_slots 
+                : (stationData.occupied || 0);
+            const available = stationInfo?.open_slots !== null && stationInfo?.open_slots !== undefined 
+                ? stationInfo.open_slots 
+                : (stationData.available || 0);
+            
             return {
                 id: stationData.id,
                 name: stationInfo?.name || `Station ${stationData.id}`,
@@ -144,8 +152,8 @@ app.get('/api/stations', async (req, res) => {
                 coordinates: stationInfo?.coordinates || [0, 0],
                 hours: stationInfo?.hours || null,
                 isOpen: stationInfo?.hours ? locationManager.isOpen(stationData.id) : true,
-                available: stationData.available || 0,
-                occupied: stationData.occupied || 0,
+                available: available,  // open_slots = to return
+                occupied: occupied,    // filled_slots = to take
                 error: stationData.error || false
             };
         });
@@ -449,6 +457,15 @@ const startBackgroundPolling = async () => {
                         // Update cache with fresh data
                         const stations = data.map(stationData => {
                             const stationInfo = stationInfoMap[stationData.id];
+                            
+                            // Use filled_slots and open_slots from external API if available, otherwise fall back to supplier API data
+                            const occupied = stationInfo?.filled_slots !== null && stationInfo?.filled_slots !== undefined 
+                                ? stationInfo.filled_slots 
+                                : (stationData.occupied || 0);
+                            const available = stationInfo?.open_slots !== null && stationInfo?.open_slots !== undefined 
+                                ? stationInfo.open_slots 
+                                : (stationData.available || 0);
+                            
                             return {
                                 id: stationData.id,
                                 name: stationInfo?.name || `Station ${stationData.id}`,
@@ -456,8 +473,8 @@ const startBackgroundPolling = async () => {
                                 coordinates: stationInfo?.coordinates || [0, 0],
                                 hours: stationInfo?.hours || null,
                                 isOpen: stationInfo?.hours ? locationManager.isOpen(stationData.id) : true,
-                                available: stationData.available || 0,
-                                occupied: stationData.occupied || 0,
+                                available: available,  // open_slots = to return
+                                occupied: occupied,    // filled_slots = to take
                                 error: stationData.error || false
                             };
                         });
