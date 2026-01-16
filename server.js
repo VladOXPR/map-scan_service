@@ -119,15 +119,23 @@ app.get('/api/stations', async (req, res) => {
         return res.json(cachedData);
     }
 
-    const stationIds = locationManager.getAllIds();
-
     try {
+        // Fetch all stations from external API
+        const allStations = await locationManager.getAll();
+        const stationIds = allStations.map(s => s.id);
+        
         // Fetch station data (automatically uses ChargeNow or Energo API based on station ID)
         const stationsData = await supplierApi.fetchMultipleStations(stationIds);
         
+        // Create a map of station info by ID
+        const stationInfoMap = {};
+        allStations.forEach(station => {
+            stationInfoMap[station.id] = station;
+        });
+        
         // Merge with location data
         const stations = stationsData.map(stationData => {
-            const stationInfo = locationManager.getById(stationData.id);
+            const stationInfo = stationInfoMap[stationData.id];
             
             return {
                 id: stationData.id,
@@ -135,7 +143,7 @@ app.get('/api/stations', async (req, res) => {
                 address: stationInfo?.address || '',
                 coordinates: stationInfo?.coordinates || [0, 0],
                 hours: stationInfo?.hours || null,
-                isOpen: locationManager.isOpen(stationData.id),
+                isOpen: stationInfo?.hours ? locationManager.isOpen(stationData.id) : true,
                 available: stationData.available || 0,
                 occupied: stationData.occupied || 0,
                 error: stationData.error || false
@@ -156,22 +164,34 @@ app.get('/api/stations', async (req, res) => {
 });
 
 // Locations data endpoint
-app.get('/api/locations', (req, res) => {
-    res.json(locationManager.getForMap());
+app.get('/api/locations', async (req, res) => {
+    try {
+        const locations = await locationManager.getForMap();
+        res.json(locations);
+    } catch (error) {
+        console.error('Error fetching locations:', error);
+        res.status(500).json({ error: 'Failed to fetch locations' });
+    }
 });
 
 // Station management endpoints
-app.get('/api/admin/stations', (req, res) => {
-    res.json(locationManager.getAll());
+app.get('/api/admin/stations', async (req, res) => {
+    try {
+        const stations = await locationManager.getAll();
+        res.json(stations);
+    } catch (error) {
+        console.error('Error fetching stations:', error);
+        res.status(500).json({ error: 'Failed to fetch stations' });
+    }
 });
 
-app.post('/api/admin/stations', (req, res) => {
+app.post('/api/admin/stations', async (req, res) => {
     try {
         const { id, name, address, coordinates, hours } = req.body;
         
         // Validate required fields
-        if (!id || !name || !address || !coordinates) {
-            return res.status(400).json({ error: 'Missing required fields: id, name, address, coordinates' });
+        if (!id || !name || !coordinates) {
+            return res.status(400).json({ error: 'Missing required fields: id, name, coordinates' });
         }
         
         // Validate coordinates format
@@ -180,33 +200,36 @@ app.post('/api/admin/stations', (req, res) => {
         }
         
         // Check if station already exists
-        if (locationManager.getById(id)) {
+        const existingStation = await locationManager.getById(id);
+        if (existingStation) {
             return res.status(409).json({ error: 'Station with this ID already exists' });
         }
         
         // Add the new station
-        const stationData = { name, address, coordinates };
+        const stationData = { name, coordinates };
+        if (address) stationData.address = address;
         if (hours) stationData.hours = hours;
         
-        locationManager.add(id, stationData);
+        const newStation = await locationManager.add(id, stationData);
         
         res.status(201).json({ 
             message: 'Station added successfully', 
-            station: locationManager.getById(id) 
+            station: newStation
         });
     } catch (error) {
         console.error('Error adding station:', error);
-        res.status(500).json({ error: 'Failed to add station' });
+        res.status(500).json({ error: error.message || 'Failed to add station' });
     }
 });
 
-app.put('/api/admin/stations/:id', (req, res) => {
+app.put('/api/admin/stations/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { name, address, coordinates, hours } = req.body;
         
         // Check if station exists
-        if (!locationManager.getById(id)) {
+        const existingStation = await locationManager.getById(id);
+        if (!existingStation) {
             return res.status(404).json({ error: 'Station not found' });
         }
         
@@ -222,34 +245,35 @@ app.put('/api/admin/stations/:id', (req, res) => {
         if (coordinates) updateData.coordinates = coordinates;
         if (hours) updateData.hours = hours;
         
-        locationManager.update(id, updateData);
+        const updatedStation = await locationManager.update(id, updateData);
         
         res.json({ 
             message: 'Station updated successfully', 
-            station: locationManager.getById(id) 
+            station: updatedStation
         });
     } catch (error) {
         console.error('Error updating station:', error);
-        res.status(500).json({ error: 'Failed to update station' });
+        res.status(500).json({ error: error.message || 'Failed to update station' });
     }
 });
 
-app.delete('/api/admin/stations/:id', (req, res) => {
+app.delete('/api/admin/stations/:id', async (req, res) => {
     try {
         const { id } = req.params;
         
         // Check if station exists
-        if (!locationManager.getById(id)) {
+        const existingStation = await locationManager.getById(id);
+        if (!existingStation) {
             return res.status(404).json({ error: 'Station not found' });
         }
         
         // Remove the station
-        locationManager.remove(id);
+        await locationManager.remove(id);
         
         res.json({ message: 'Station deleted successfully' });
     } catch (error) {
         console.error('Error deleting station:', error);
-        res.status(500).json({ error: 'Failed to delete station' });
+        res.status(500).json({ error: error.message || 'Failed to delete station' });
     }
 });
 
@@ -374,7 +398,7 @@ process.on('SIGTERM', () => {
     if (stationPollingStop) stationPollingStop();
     if (batteryPollingStop) batteryPollingStop();
     
-    saveAnalyticsData();
+    qrStats.saveStats();
     process.exit(0);
 });
 
@@ -385,7 +409,7 @@ process.on('SIGINT', () => {
     if (stationPollingStop) stationPollingStop();
     if (batteryPollingStop) batteryPollingStop();
     
-    saveAnalyticsData();
+    qrStats.saveStats();
     process.exit(0);
 });
 
@@ -397,43 +421,60 @@ let stationPollingStop = null;
 let batteryPollingStop = null;
 
 // Start background polling for station data
-const startBackgroundPolling = () => {
+const startBackgroundPolling = async () => {
     console.log('Starting background polling for ChargeNow API...');
     
-    const stationIds = locationManager.getAllIds();
-    
-    // Poll station data every 30 seconds
-    stationPollingStop = supplierApi.pollStationData(
-        stationIds,
-        30000, // 30 seconds
-        (error, data) => {
-            if (error) {
-                console.error('Error in station polling:', error.message);
-            } else {
-                console.log(`Background: Fetched data for ${data.length} stations`);
-                // Update cache with fresh data
-                const stations = data.map(stationData => {
-                    const stationInfo = locationManager.getById(stationData.id);
-                    return {
-                        id: stationData.id,
-                        name: stationInfo?.name || `Station ${stationData.id}`,
-                        address: stationInfo?.address || '',
-                        coordinates: stationInfo?.coordinates || [0, 0],
-                        hours: stationInfo?.hours || null,
-                        isOpen: locationManager.isOpen(stationData.id),
-                        available: stationData.available || 0,
-                        occupied: stationData.occupied || 0,
-                        error: stationData.error || false
-                    };
-                });
-                
-                apiCache.set('stations', {
-                    data: stations,
-                    timestamp: Date.now()
-                });
+    try {
+        // Fetch station IDs from external API
+        const allStations = await locationManager.getAll();
+        const stationIds = allStations.map(s => s.id);
+        
+        // Poll station data every 30 seconds
+        stationPollingStop = supplierApi.pollStationData(
+            stationIds,
+            30000, // 30 seconds
+            async (error, data) => {
+                if (error) {
+                    console.error('Error in station polling:', error.message);
+                } else {
+                    try {
+                        // Fetch latest stations from external API
+                        const allStations = await locationManager.getAll();
+                        const stationInfoMap = {};
+                        allStations.forEach(station => {
+                            stationInfoMap[station.id] = station;
+                        });
+                        
+                        console.log(`Background: Fetched data for ${data.length} stations`);
+                        // Update cache with fresh data
+                        const stations = data.map(stationData => {
+                            const stationInfo = stationInfoMap[stationData.id];
+                            return {
+                                id: stationData.id,
+                                name: stationInfo?.name || `Station ${stationData.id}`,
+                                address: stationInfo?.address || '',
+                                coordinates: stationInfo?.coordinates || [0, 0],
+                                hours: stationInfo?.hours || null,
+                                isOpen: stationInfo?.hours ? locationManager.isOpen(stationData.id) : true,
+                                available: stationData.available || 0,
+                                occupied: stationData.occupied || 0,
+                                error: stationData.error || false
+                            };
+                        });
+                        
+                        apiCache.set('stations', {
+                            data: stations,
+                            timestamp: Date.now()
+                        });
+                    } catch (fetchError) {
+                        console.error('Error fetching stations in polling callback:', fetchError);
+                    }
+                }
             }
-        }
-    );
+        );
+    } catch (error) {
+        console.error('Error starting background polling:', error);
+    }
     
     // Poll battery orders every 60 seconds
     batteryPollingStop = supplierApi.pollBatteryOrders(

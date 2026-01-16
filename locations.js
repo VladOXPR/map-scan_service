@@ -1,252 +1,188 @@
-// Centralized location management for CUUB battery rental stations
-// This file contains all location data in one place for easy management
+// Station data management using external API
+// All station data is now stored in an external database and accessed via API
 
-const locations = {
-    'DTN00872': {
-        id: 'DTN00872',
-        name: 'DePaul LP Student Center',
-        address: 'LP Student Center, 1st Floor, Chicago, IL',
-        coordinates: [-87.65415, 41.92335],
-        hours: {
-            monday: { open: '08:00', close: '22:00' },
-            tuesday: { open: '08:00', close: '22:00' },
-            wednesday: { open: '08:00', close: '22:00' },
-            thursday: { open: '08:00', close: '22:00' },
-            friday: { open: '08:00', close: '22:00' },
-            saturday: { open: '10:00', close: '20:00' },
-            sunday: { open: '10:00', close: '20:00' }
-        }
-    },
-    'DTN00971': {
-        id: 'DTN00971',
-        name: 'DePaul University Loop',
-        address: 'DePaul University Loop, Chicago, IL',
-        coordinates: [-87.6298, 41.8776],
-        hours: {
-            monday: { open: '08:00', close: '22:00' },
-            tuesday: { open: '08:00', close: '22:00' },
-            wednesday: { open: '08:00', close: '22:00' },
-            thursday: { open: '08:00', close: '22:00' },
-            friday: { open: '08:00', close: '22:00' },
-            saturday: { open: '10:00', close: '20:00' },
-            sunday: { open: '10:00', close: '20:00' }
-        }
-    },
-    'DTN00970': {
-        id: 'DTN00970',
-        name: 'DePaul Theater School',
-        address: 'Theater School, 1st Floor, Chicago, IL',
-        coordinates: [-87.65875687443715, 41.92483761368347],
-        hours: {
-            monday: { open: '08:00', close: '22:00' },
-            tuesday: { open: '08:00', close: '22:00' },
-            wednesday: { open: '08:00', close: '22:00' },
-            thursday: { open: '08:00', close: '22:00' },
-            friday: { open: '08:00', close: '22:00' },
-            saturday: { open: '10:00', close: '20:00' },
-            sunday: { open: '10:00', close: '20:00' }
-        }
-    },
-    'BJH09881': {
-        id: 'BJH09881',
-        name: 'Parlay Lincoln Park',
-        address: 'Parlay Lincoln Park, Chicago, IL',
-        coordinates: [-87.65328, 41.92927],
-        hours: {
-            monday: { open: '11:00', close: '02:00' },
-            tuesday: { open: '11:00', close: '02:00' },
-            wednesday: { open: '11:00', close: '02:00' },
-            thursday: { open: '11:00', close: '02:00' },
-            friday: { open: '11:00', close: '02:00' },
-            saturday: { open: '11:00', close: '02:00' },
-            sunday: { open: '11:00', close: '02:00' }
-        }
-    },
-    'BJH09883': {
-        id: 'BJH09883',
-        name: "Kelly's Pub",
-        address: "Kelly's Pub, Chicago, IL",
-        coordinates: [-87.65298, 41.92158],
-        hours: {
-            monday: { open: '11:00', close: '02:00' },
-            tuesday: { open: '11:00', close: '02:00' },
-            wednesday: { open: '11:00', close: '02:00' },
-            thursday: { open: '11:00', close: '02:00' },
-            friday: { open: '11:00', close: '03:00' },
-            saturday: { open: '11:00', close: '03:00' },
-            sunday: { open: '11:00', close: '02:00' }
-        }
-    },
-    'CUBT062510000030': {
-        id: 'CUBT062510000030',
-        name: 'Hello Jasmine',
-        address: 'Hello Jasmine, Chicago, IL',
-        coordinates: [-87.65306, 41.92163]
-    },
-    'CUBT062510000025': {
-        id: 'CUBT062510000025',
-        name: 'George St Pub',
-        address: 'george st pub, Chicago, IL.',
-        coordinates: [-87.64926, 41.93443]
-    },
-    'CUBT062510000027': {
-        id: 'CUBT062510000027',
-        name: 'Maison Marcel',
-        address: 'Maison Marcel, Chicago, IL',
-        coordinates: [-87.64451, 41.93822]
-    },
-    'CUBT062510000018': {
-        id: 'CUBT062510000018',
-        name: 'SAADA Beauty Salon',
-        address: 'SAADA Beauty Salon, Chicago, IL',
-        coordinates: [-87.63975, 41.93826]
-    },
-    'CUBT062510000012': {
-        id: 'CUBT062510000012',
-        name: 'Irish Eyes',
-        address: 'Irish Eyes, Chicago, IL',
-        coordinates: [-87.65170, 41.92771]
-    },
-    'CUBT062510000013': {
-        id: 'CUBT062510000013',
-        name: 'Neva Hangry',
-        address: 'Neva Hangry, Chicago, IL',
-        coordinates: [-87.65387, 41.94369]
-    },
-    'CUBT062510000008': {
-        id: 'CUBT062510000008',
-        name: 'Dog House, Lincoln Park',
-        address: 'Dog House, Lincoln Park, Chicago, IL',
-        coordinates: [-87.65082, 41.92678]
-    },
-    'CUBT062510000029': {
-        id: 'CUBT062510000029',
-        name: 'Annoyance theater',
-        address: 'Annoyance theater, Chicago, IL',
-        coordinates: [-87.65132, 41.93985]
-    },
-    'CUBT062510000001': {
-        id: 'CUBT062510000001',
-        name: 'Sila\'s Medeteranian',
-        address: 'Sila\'s Medeteranian, Chicago, IL',
-        coordinates: [-87.64448, 41.93813]
-    },
-    'CUBT062510000019': {
-        id: 'CUBT062510000019',
-        name: 'Halligan Bar',
-        address: 'Halligan Bar, Chicago, IL',
-        coordinates: [-87.64613, 41.92341]
-    },
-    'CUBT062510000006': {
-        id: 'CUBT062510000006',
-        name: 'Hook and Latter',
-        address: 'Hook and Latter, Chicago, IL',
-        coordinates: [-87.64598, 41.92331]
-    },
-    'CUBT062510000022': {
-        id: 'CUBT062510000022',
-        name: 'Clover Lincoln Park',
-        address: 'Clover Lincoln Park, Chicago, IL',
-        coordinates: [-87.64953, 41.93283]
-    }
-};
+const fetch = require('node-fetch');
+const API_BASE_URL = 'https://api.cuub.tech/stations';
 
-// Helper functions for location management
+// Helper functions for station management via API
 const locationManager = {
-    // Get all location IDs
-    getAllIds: () => Object.keys(locations),
+    // Fetch all stations from API
+    getAll: async () => {
+        try {
+            const response = await fetch(API_BASE_URL);
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            const result = await response.json();
+            
+            if (result.success && result.data) {
+                // Convert API format to internal format
+                return result.data.map(station => ({
+                    id: station.id,
+                    name: station.title,
+                    coordinates: [parseFloat(station.longitude), parseFloat(station.latitude)],
+                    updated_at: station.updated_at
+                }));
+            }
+            return [];
+        } catch (error) {
+            console.error('Error fetching all stations:', error);
+            return [];
+        }
+    },
     
-    // Get all locations
-    getAll: () => Object.values(locations),
+    // Get all location IDs
+    getAllIds: async () => {
+        const stations = await locationManager.getAll();
+        return stations.map(s => s.id);
+    },
     
     // Get a specific location by ID
-    getById: (id) => locations[id],
+    getById: async (id) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/${id}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            const result = await response.json();
+            
+            if (result.success && result.data) {
+                const station = result.data;
+                return {
+                    id: station.id,
+                    name: station.title,
+                    coordinates: [parseFloat(station.longitude), parseFloat(station.latitude)],
+                    updated_at: station.updated_at
+                };
+            }
+            return null;
+        } catch (error) {
+            console.error(`Error fetching station ${id}:`, error);
+            return null;
+        }
+    },
     
     // Get locations formatted for map display
-    getForMap: () => Object.values(locations).map(location => ({
-        id: location.id,
-        name: location.name,
-        address: location.address,
-        coordinates: location.coordinates,
-        hours: location.hours
-    })),
+    getForMap: async () => {
+        const stations = await locationManager.getAll();
+        return stations.map(station => ({
+            id: station.id,
+            name: station.name,
+            coordinates: station.coordinates
+        }));
+    },
     
     // Get locations formatted for server API
-    getForServer: () => Object.values(locations).map(location => ({
-        id: location.id,
-        name: location.name,
-        coordinates: location.coordinates,
-        hours: location.hours
-    })),
+    getForServer: async () => {
+        const stations = await locationManager.getAll();
+        return stations.map(station => ({
+            id: station.id,
+            name: station.name,
+            coordinates: station.coordinates
+        }));
+    },
     
-    // Check if a location is currently open
+    // Check if a location is currently open (always returns true since API doesn't have hours)
     isOpen: (id) => {
-        const location = locations[id];
-        if (!location || !location.hours) return true; // Default to open if no hours specified
-        
-        const now = new Date();
-        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        const currentDay = dayNames[now.getDay()];
-        const todayHours = location.hours[currentDay];
-        
-        if (!todayHours || !todayHours.open || !todayHours.close) return true;
-        
-        const currentTime = now.getHours() * 60 + now.getMinutes();
-        const [openHour, openMin] = todayHours.open.split(':').map(Number);
-        const [closeHour, closeMin] = todayHours.close.split(':').map(Number);
-        
-        let openTime = openHour * 60 + openMin;
-        let closeTime = closeHour * 60 + closeMin;
-        
-        // Handle cases where closing time is after midnight (e.g., 02:00)
-        if (closeTime < openTime) {
-            // Location closes after midnight
-            return currentTime >= openTime || currentTime < closeTime;
+        // External API doesn't provide hours, so always return true
+        return true;
+    },
+    
+    // Add a new station
+    add: async (id, locationData) => {
+        try {
+            const response = await fetch(API_BASE_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    id: id,
+                    title: locationData.name,
+                    latitude: locationData.coordinates[1],
+                    longitude: locationData.coordinates[0]
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || `HTTP error! Status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            if (result.success) {
+                return {
+                    id: result.data.id,
+                    name: result.data.title,
+                    coordinates: [parseFloat(result.data.longitude), parseFloat(result.data.latitude)]
+                };
+            }
+            throw new Error('Failed to add station');
+        } catch (error) {
+            console.error('Error adding station:', error);
+            throw error;
         }
-        
-        return currentTime >= openTime && currentTime < closeTime;
     },
     
-    // Get formatted hours string for display
-    getHoursDisplay: (id, day = null) => {
-        const location = locations[id];
-        if (!location || !location.hours) return 'Hours not available';
-        
-        const now = new Date();
-        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        const currentDay = day || dayNames[now.getDay()];
-        const todayHours = location.hours[currentDay];
-        
-        if (!todayHours) return 'Closed';
-        
-        return `${todayHours.open} - ${todayHours.close}`;
+    // Remove a station
+    remove: async (id) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/${id}`, {
+                method: 'DELETE'
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || `HTTP error! Status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            return result.success;
+        } catch (error) {
+            console.error('Error removing station:', error);
+            throw error;
+        }
     },
     
-    // Add a new location
-    add: (id, locationData) => {
-        locations[id] = {
-            id,
-            ...locationData
-        };
-    },
-    
-    // Remove a location
-    remove: (id) => {
-        delete locations[id];
-    },
-    
-    // Update a location
-    update: (id, locationData) => {
-        if (locations[id]) {
-            locations[id] = {
-                ...locations[id],
-                ...locationData
-            };
+    // Update a station
+    update: async (id, locationData) => {
+        try {
+            const updateData = {};
+            if (locationData.name) updateData.title = locationData.name;
+            if (locationData.coordinates) {
+                updateData.latitude = locationData.coordinates[1];
+                updateData.longitude = locationData.coordinates[0];
+            }
+            
+            const response = await fetch(`${API_BASE_URL}/${id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(updateData)
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || `HTTP error! Status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            if (result.success) {
+                return {
+                    id: result.data.id,
+                    name: result.data.title,
+                    coordinates: [parseFloat(result.data.longitude), parseFloat(result.data.latitude)]
+                };
+            }
+            throw new Error('Failed to update station');
+        } catch (error) {
+            console.error('Error updating station:', error);
+            throw error;
         }
     }
 };
 
 module.exports = {
-    locations,
     locationManager
 };

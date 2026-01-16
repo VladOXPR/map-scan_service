@@ -252,65 +252,12 @@
             </div>
             
             <div class="form-group">
-                <label for="stationAddress">Address *</label>
-                <textarea id="stationAddress" name="address" required placeholder="Full address including city and state"></textarea>
-            </div>
-            
-            <div class="form-group">
                 <label>Coordinates *</label>
                 <div class="coordinates-input">
                     <input type="number" id="longitude" name="longitude" step="any" required placeholder="Longitude (e.g., -87.65415)">
                     <input type="number" id="latitude" name="latitude" step="any" required placeholder="Latitude (e.g., 41.92335)">
                 </div>
             </div>
-            
-            <div class="form-group">
-                <label>Opening Hours (24-hour format: HH:MM)</label>
-                <div style="display: grid; gap: 10px; margin-top: 10px;">
-                    <!-- Monday -->
-                    <div style="display: grid; grid-template-columns: 100px 1fr 1fr; gap: 10px; align-items: center;">
-                        <label style="margin: 0;">Monday</label>
-                        <input type="time" id="monday_open" placeholder="08:00">
-                        <input type="time" id="monday_close" placeholder="22:00">
-                    </div>
-                    <!-- Tuesday -->
-                    <div style="display: grid; grid-template-columns: 100px 1fr 1fr; gap: 10px; align-items: center;">
-                        <label style="margin: 0;">Tuesday</label>
-                        <input type="time" id="tuesday_open" placeholder="08:00">
-                        <input type="time" id="tuesday_close" placeholder="22:00">
-                    </div>
-                    <!-- Wednesday -->
-                    <div style="display: grid; grid-template-columns: 100px 1fr 1fr; gap: 10px; align-items: center;">
-                        <label style="margin: 0;">Wednesday</label>
-                        <input type="time" id="wednesday_open" placeholder="08:00">
-                        <input type="time" id="wednesday_close" placeholder="22:00">
-                    </div>
-                    <!-- Thursday -->
-                    <div style="display: grid; grid-template-columns: 100px 1fr 1fr; gap: 10px; align-items: center;">
-                        <label style="margin: 0;">Thursday</label>
-                        <input type="time" id="thursday_open" placeholder="08:00">
-                        <input type="time" id="thursday_close" placeholder="22:00">
-                    </div>
-                    <!-- Friday -->
-                    <div style="display: grid; grid-template-columns: 100px 1fr 1fr; gap: 10px; align-items: center;">
-                        <label style="margin: 0;">Friday</label>
-                        <input type="time" id="friday_open" placeholder="08:00">
-                        <input type="time" id="friday_close" placeholder="22:00">
-                    </div>
-                    <!-- Saturday -->
-                    <div style="display: grid; grid-template-columns: 100px 1fr 1fr; gap: 10px; align-items: center;">
-                        <label style="margin: 0;">Saturday</label>
-                        <input type="time" id="saturday_open" placeholder="10:00">
-                        <input type="time" id="saturday_close" placeholder="20:00">
-                    </div>
-                    <!-- Sunday -->
-                    <div style="display: grid; grid-template-columns: 100px 1fr 1fr; gap: 10px; align-items: center;">
-                        <label style="margin: 0;">Sunday</label>
-                        <input type="time" id="sunday_open" placeholder="10:00">
-                        <input type="time" id="sunday_close" placeholder="20:00">
-            </div>
-        </div>
-        </div>
 
             <div class="form-actions">
                 <button type="button" class="btn-secondary" onclick="closeStationModal()">Cancel</button>
@@ -347,7 +294,7 @@
                         <div class="station-info">
                             <div class="station-name">${station.name}</div>
                             <div class="station-details">
-                                ID: ${station.id} | ${station.address}<br>
+                                ID: ${station.id}<br>
                                 Coordinates: ${station.coordinates[0]}, ${station.coordinates[1]}
                             </div>
                         </div>
@@ -391,20 +338,8 @@
                     document.getElementById('stationId').value = station.id;
                     document.getElementById('stationId').disabled = true; // Don't allow ID changes
                     document.getElementById('stationName').value = station.name;
-                    document.getElementById('stationAddress').value = station.address;
                     document.getElementById('longitude').value = station.coordinates[0];
                     document.getElementById('latitude').value = station.coordinates[1];
-                    
-                    // Populate hours if available
-                    if (station.hours) {
-                        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-                        days.forEach(day => {
-                            if (station.hours[day]) {
-                                document.getElementById(`${day}_open`).value = station.hours[day].open || '';
-                                document.getElementById(`${day}_close`).value = station.hours[day].close || '';
-                            }
-                        });
-                    }
                     
                     document.getElementById('stationModal').style.display = 'block';
                 }
@@ -448,23 +383,10 @@
 
         const formData = new FormData(e.target);
         
-        // Collect opening hours for all days
-        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-        const hours = {};
-        days.forEach(day => {
-            const open = document.getElementById(`${day}_open`).value;
-            const close = document.getElementById(`${day}_close`).value;
-            if (open && close) {
-                hours[day] = { open, close };
-            }
-        });
-        
         const stationData = {
             id: formData.get('id'),
             name: formData.get('name'),
-            address: formData.get('address'),
-            coordinates: [parseFloat(formData.get('longitude')), parseFloat(formData.get('latitude'))],
-            hours: Object.keys(hours).length > 0 ? hours : undefined
+            coordinates: [parseFloat(formData.get('longitude')), parseFloat(formData.get('latitude'))]
         };
 
         try {
