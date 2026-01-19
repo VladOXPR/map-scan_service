@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CUUB Map Service</title>
+    <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Modal Styles */
+        .station-modal {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translate(-50%, 100%);
+            max-width: 500px;
+            width: 100%;
+            background-color: #000000;
+            border-top-left-radius: 20px;
+            border-top-right-radius: 20px;
+            padding: 20px;
+            padding-bottom: 30px;
+            transition: transform 0.3s ease-out;
+            z-index: 1000;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .station-modal.active {
+            transform: translate(-50%, 0);
+        }
+
+        .modal-content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+        }
+
+        .modal-title {
+            color: #ffffff;
+            font-size: 18px;
+            font-weight: 600;
+            flex: 1;
+        }
+
+        .modal-slots {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: flex-end;
+        }
+
+        .slot-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .slot-icon {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .slot-icon.filled {
+            background-color: #0198FD;
+        }
+
+        .slot-icon.open {
+            background-color: #808080;
+        }
+
+        .slot-text {
+            color: #ffffff;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .slot-number {
+            font-weight: 600;
+        }
+
+        .directions-button {
+            width: 100%;
+            background-color: #0198FD;
+            color: #ffffff;
+            border: none;
+            border-radius: 12px;
+            padding: 16px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .directions-button:active {
+            background-color: #0178CD;
+        }
+
+        /* Mapbox marker customization */
+        .mapboxgl-marker {
+            cursor: pointer;
+        }
+
+        /* Battery Modal Styles */
+        .battery-modal {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translate(-50%, -100%);
+            max-width: 500px;
+            width: 100%;
+            background-color: #000000;
+            border-bottom-left-radius: 20px;
+            border-bottom-right-radius: 20px;
+            padding: 20px;
+            padding-top: 40px;
+            transition: transform 0.3s ease-out;
+            z-index: 1001;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .battery-modal.active {
+            transform: translate(-50%, 0);
+        }
+
+        .battery-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .battery-info {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .battery-label {
+            color: #808080;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .battery-value {
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .battery-duration {
+            flex: 1;
+        }
+
+        .battery-paid {
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <!-- Battery Modal (for scan service) -->
+    <div class="battery-modal" id="batteryModal">
+        <div class="battery-content">
+            <div class="battery-info battery-duration">
+                <div class="battery-label">Duration</div>
+                <div class="battery-value" id="batteryDuration">00:00:00</div>
+            </div>
+            <div class="battery-info battery-paid">
+                <div class="battery-label">Paid</div>
+                <div class="battery-value" id="batteryPaid">$0</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Station Modal -->
+    <div class="station-modal" id="stationModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="modalTitle">Title</div>
+                <div class="modal-slots">
+                    <div class="slot-info">
+                        <div class="slot-icon filled"></div>
+                        <div class="slot-text">
+                            <span class="slot-number" id="filledSlots">0</span>
+                            <span>Filled Slots</span>
+                        </div>
+                    </div>
+                    <div class="slot-info">
+                        <div class="slot-icon open"></div>
+                        <div class="slot-text">
+                            <span class="slot-number" id="openSlots">0</span>
+                            <span>Open Slots</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button class="directions-button" id="directionsButton">Get Directions</button>
+        </div>
+    </div>
+
+    <script src="map_view.js"></script>
+    <script src="scan_service.js"></script>
+</body>
+</html>

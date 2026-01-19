@@ -2,3 +2,4 @@
 server.log
 qrStats.json
 energoToken.json
+node_modules/
