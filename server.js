@@ -161,7 +161,7 @@ app.get('/:sticker_id', (req, res) => {
 });
 
 // Start server - Cloud Run will set PORT environment variable
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 const HOST = '0.0.0.0'; // Listen on all network interfaces for Cloud Run
 
 if (require.main === module) {
