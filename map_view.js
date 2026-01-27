@@ -243,6 +243,13 @@ function showStationModal(station) {
     openSlots.textContent = station.open_slots || 0;
     
     modal.classList.add('active');
+    
+    // Move support button up to avoid overlay
+    const supportButton = document.getElementById('supportButton');
+    if (supportButton) {
+        const modalHeight = modal.offsetHeight || 200; // Get modal height or use default
+        supportButton.style.bottom = `${modalHeight + 20}px`; // Modal height + 20px padding
+    }
 }
 
 // Hide station modal and reset marker size
@@ -250,6 +257,12 @@ function hideStationModal() {
     modal.classList.remove('active');
     selectedStation = null;
     selectedStationId = null;
+    
+    // Move support button back to original position
+    const supportButton = document.getElementById('supportButton');
+    if (supportButton) {
+        supportButton.style.bottom = '20px';
+    }
     
     // Update the source data to unmark all stations
     const geojson = stationsToGeoJSON(stations, null);
@@ -301,3 +314,37 @@ map.on('click', (e) => {
 map.on('load', () => {
     fetchStations();
 });
+
+// Get sticker_id from URL path (if available)
+function getStickerIdFromURL() {
+    const path = window.location.pathname;
+    // Remove leading slash and get the sticker_id
+    const stickerId = path.replace(/^\//, '');
+    // If it's empty or matches known routes, return null
+    if (!stickerId || stickerId === 'map' || stickerId === 'api' || stickerId.includes('.')) {
+        return null;
+    }
+    return stickerId;
+}
+
+// Customer Support Button - redirect to SMS
+const supportButton = document.getElementById('supportButton');
+if (supportButton) {
+    supportButton.addEventListener('click', () => {
+        // Format phone number for SMS (remove dashes and spaces)
+        const phoneNumber = '7739460236';
+        
+        // Get sticker_id from URL if available
+        const stickerId = getStickerIdFromURL();
+        
+        // Build SMS URL with optional body text
+        let smsUrl = `sms:${phoneNumber}`;
+        if (stickerId) {
+            const messageText = `The number on my battery is ${stickerId}`;
+            smsUrl += `?body=${encodeURIComponent(messageText)}`;
+        }
+        
+        // Use sms: protocol to open SMS app
+        window.location.href = smsUrl;
+    });
+}

@@ -127,6 +127,39 @@
             cursor: pointer;
         }
 
+        /* Customer Support Button */
+        .support-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #000000;
+            border-radius: 28px;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s, bottom 0.3s ease-out;
+        }
+
+        .support-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        .support-button:active {
+            transform: scale(0.95);
+        }
+
+        .support-text {
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
         /* Battery Modal Styles */
         .battery-modal {
             position: fixed;
@@ -223,6 +256,11 @@
             </div>
             <button class="directions-button" id="directionsButton">Get Directions</button>
         </div>
+    </div>
+
+    <!-- Customer Support Button -->
+    <div class="support-button" id="supportButton" title="Contact Support">
+        <span class="support-text">Text Support</span>
     </div>
 
     <script src="map_view.js"></script>
