@@ -140,6 +140,51 @@ app.post('/api/battery/:sticker_id', express.json(), (req, res) => {
     request.end();
 });
 
+// Proxy endpoint for CUUB battery API (PATCH - update sizl redirect status)
+app.patch('/api/battery/:sticker_id', express.json(), (req, res) => {
+    const stickerId = req.params.sticker_id;
+    const manufactureId = req.headers['manufacture_id'];
+    
+    const patchData = JSON.stringify({ sizl: true });
+    
+    const options = {
+        hostname: 'api.cuub.tech',
+        path: `/battery/${stickerId}`,
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(patchData),
+            'manufacture_id': manufactureId || ''
+        }
+    };
+
+    const request = https.request(options, (apiResponse) => {
+        let data = '';
+
+        apiResponse.on('data', (chunk) => {
+            data += chunk;
+        });
+
+        apiResponse.on('end', () => {
+            try {
+                const jsonData = JSON.parse(data);
+                res.json(jsonData);
+            } catch (error) {
+                console.error('Error parsing API response:', error);
+                res.status(500).json({ success: false, error: 'Failed to parse API response' });
+            }
+        });
+    });
+
+    request.on('error', (error) => {
+        console.error('Error updating sizl status:', error);
+        res.status(500).json({ success: false, error: 'Failed to update sizl status' });
+    });
+
+    request.write(patchData);
+    request.end();
+});
+
 // Serve map view as default
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'map_view.html'));
