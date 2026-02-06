@@ -12,7 +12,7 @@ const map = new mapboxgl.Map({
     style: 'mapbox://styles/mapbox/standard',
     config: {
         basemap: {
-            lightPreset: "dusk",
+            lightPreset: "night",
             showPedestrianRoads: false,
             showPlaceLabels: false,
             showPointOfInterestLabels: false,

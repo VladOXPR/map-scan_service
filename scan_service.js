@@ -105,14 +105,14 @@ async function recordSizlTap(stickerId, manufactureId) {
 }
 
 // Create scan record
-async function createScanRecord(stickerId, manufactureId) {
+async function createScanRecord(stickerId, manufactureId, stickerType) {
     try {
         const response = await fetch(`/api/battery/${stickerId}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'manufacture_id': manufactureId,
-                'sticker_type': 'type one'
+                'sticker_type': stickerType || 'type one'
             },
             body: JSON.stringify({})
         });
@@ -223,8 +223,9 @@ function initScanService() {
                 showBatteryModal(batteryData);
                 
                 // Immediately create scan record after fetching battery data
+                // sticker_type comes from battery table "type" column (returned by GET battery)
                 if (batteryData.manufacture_id) {
-                    createScanRecord(stickerId, batteryData.manufacture_id);
+                    createScanRecord(stickerId, batteryData.manufacture_id, batteryData.type);
                 }
             }
         });
