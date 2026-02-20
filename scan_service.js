@@ -149,10 +149,16 @@ function showBatteryModal(batteryData) {
             adExtension.classList.remove('visible');
         }
         
-        const initialDuration = batteryData.duration || '00:00:00';
+        const durationElement = document.getElementById('batteryDuration');
+        const isReturned = batteryData.duration && String(batteryData.duration).toLowerCase() === 'battery returned';
         
-        // Start the count-up timer
-        startDurationTimer(initialDuration);
+        if (isReturned) {
+            if (durationElement) durationElement.textContent = 'Battery returned';
+            stopDurationTimer();
+        } else {
+            const initialDuration = batteryData.duration || '00:00:00';
+            startDurationTimer(initialDuration);
+        }
         
         // Set paid amount
         paidElement.textContent = `$${batteryData.amountPaid || 0}`;
