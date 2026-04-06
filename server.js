@@ -3,9 +3,11 @@ const path = require('path');
 const https = require('https');
 const app = express();
 
-// Set Content-Security-Policy header
+// Allow embedding in iframes (e.g. Framer at framer.com, map.cuub.tech)
 app.use((req, res, next) => {
+    // Permit any parent origin to frame this app (replaces restrictive X-Frame-Options)
     res.setHeader('Content-Security-Policy', 'frame-ancestors *');
+    res.removeHeader('X-Frame-Options');
     next();
 });
 
@@ -192,6 +194,11 @@ app.get('/', (req, res) => {
 
 // Also serve map view at /map for backwards compatibility
 app.get('/map', (req, res) => {
+    res.sendFile(path.join(__dirname, 'map_view.html'));
+});
+
+// Embed-friendly URL (matches Framer iframe pattern: .../map.html)
+app.get('/map.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'map_view.html'));
 });
 
