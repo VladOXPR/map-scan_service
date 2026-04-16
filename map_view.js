@@ -1,32 +1,8 @@
-// Mapbox access token
-const MAPBOX_TOKEN = 'pk.eyJ1IjoidmxhZHZhbGNoa291IiwiYSI6ImNtYzlhemFpZTF2MXUya29sNzM4OXhuZjYifQ.jrfH07QPTw_XfnmXXv42Pw';
-
 // CUUB API endpoint (proxied through server to avoid CORS)
 const STATIONS_API = '/api/stations';
 
-// Initialize map
-mapboxgl.accessToken = MAPBOX_TOKEN;
-
-const map = new mapboxgl.Map({
-    container: 'map',
-    style: 'mapbox://styles/mapbox/standard',
-    config: {
-        basemap: {
-            lightPreset: "night",
-            showPedestrianRoads: false,
-            showPlaceLabels: false,
-            showPointOfInterestLabels: false,
-            showTransitLabels: false,
-            showAdminBoundaries: false,
-            show3dFacades: true,
-            theme: "faded"
-        }
-    },
-    center: [-87.65, 41.9295],
-    zoom: 13.5,
-    bearing: 0.00,
-    pitch: 45,
-});
+// Map instance (created after token is loaded from /api/mapbox-token)
+let map;
 
 // Store stations data
 let stations = [];
@@ -269,51 +245,68 @@ function hideStationModal() {
     map.getSource('stations').setData(geojson);
 }
 
-// Handle directions button click
-directionsButton.addEventListener('click', () => {
-    if (selectedStation) {
-        const { latitude, longitude } = selectedStation;
-        
-        // Open directions in default map app
-        // For iOS: use maps://
-        // For Android: use geo: or google.navigation:
-        // Universal: use https://maps.google.com/maps?daddr=
-        
-        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
-        let directionsUrl;
-        
-        if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
-            // iOS
-            directionsUrl = `maps://maps.google.com/maps?daddr=${latitude},${longitude}`;
-        } else if (/android/i.test(userAgent)) {
-            // Android
-            directionsUrl = `google.navigation:q=${latitude},${longitude}`;
-        } else {
-            // Fallback to web
-            directionsUrl = `https://maps.google.com/maps?daddr=${latitude},${longitude}`;
-        }
-        
-        window.location.href = directionsUrl;
+async function startMapApp() {
+    const res = await fetch('/api/mapbox-token');
+    const data = await res.json();
+    if (!data.token) {
+        console.error('Mapbox token missing. Set MAPBOX_ACCESS_TOKEN (see .env.example).');
+        return;
     }
-});
-
-// Close modal when clicking outside (on the map)
-map.on('click', (e) => {
-    // Check if click was on a feature (cluster or marker)
-    const features = map.queryRenderedFeatures(e.point, {
-        layers: ['clusters', 'unclustered-point']
+    mapboxgl.accessToken = data.token;
+    map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/standard',
+        config: {
+            basemap: {
+                lightPreset: 'night',
+                showPedestrianRoads: false,
+                showPlaceLabels: false,
+                showPointOfInterestLabels: false,
+                showTransitLabels: false,
+                showAdminBoundaries: false,
+                show3dFacades: true,
+                theme: 'faded'
+            }
+        },
+        center: [-87.65, 41.9295],
+        zoom: 13.5,
+        bearing: 0.00,
+        pitch: 45
     });
-    
-    // Only close if clicking on the map itself, not on a feature
-    if (features.length === 0) {
-        hideStationModal();
-    }
-});
 
-// Initialize: fetch stations when map loads
-map.on('load', () => {
-    fetchStations();
-});
+    if (directionsButton) {
+        directionsButton.addEventListener('click', () => {
+            if (selectedStation) {
+                const { latitude, longitude } = selectedStation;
+                const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+                let directionsUrl;
+                if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+                    directionsUrl = `maps://maps.google.com/maps?daddr=${latitude},${longitude}`;
+                } else if (/android/i.test(userAgent)) {
+                    directionsUrl = `google.navigation:q=${latitude},${longitude}`;
+                } else {
+                    directionsUrl = `https://maps.google.com/maps?daddr=${latitude},${longitude}`;
+                }
+                window.location.href = directionsUrl;
+            }
+        });
+    }
+
+    map.on('click', (e) => {
+        const features = map.queryRenderedFeatures(e.point, {
+            layers: ['clusters', 'unclustered-point']
+        });
+        if (features.length === 0) {
+            hideStationModal();
+        }
+    });
+
+    map.on('load', () => {
+        fetchStations();
+    });
+}
+
+startMapApp();
 
 // Get sticker_id from URL path (if available)
 function getStickerIdFromURL() {
@@ -321,7 +314,7 @@ function getStickerIdFromURL() {
     // Remove leading slash and get the sticker_id
     const stickerId = path.replace(/^\//, '');
     // If it's empty or matches known routes, return null
-    if (!stickerId || stickerId === 'map' || stickerId === 'api' || stickerId.includes('.')) {
+    if (!stickerId || stickerId === 'map' || stickerId === 'blank' || stickerId === 'api' || stickerId.includes('.')) {
         return null;
     }
     return stickerId;
@@ -332,7 +325,7 @@ const supportButton = document.getElementById('supportButton');
 if (supportButton) {
     supportButton.addEventListener('click', () => {
         // Format phone number for SMS (remove dashes and spaces)
-        const phoneNumber = '7739460236';
+        const phoneNumber = '+1464237744';
         
         // Get sticker_id from URL if available
         const stickerId = getStickerIdFromURL();

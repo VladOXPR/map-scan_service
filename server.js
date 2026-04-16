@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const https = require('https');
@@ -17,6 +18,15 @@ app.use('/api', (req, res, next) => {
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     next();
+});
+
+// Mapbox public token from env (keeps pk. token out of git for push protection)
+app.get('/api/mapbox-token', (req, res) => {
+    const token = process.env.MAPBOX_ACCESS_TOKEN;
+    if (!token) {
+        return res.status(503).json({ error: 'MAPBOX_ACCESS_TOKEN is not set' });
+    }
+    res.json({ token });
 });
 
 // Proxy endpoint for CUUB stations API
@@ -200,6 +210,11 @@ app.get('/map', (req, res) => {
 // Embed-friendly URL (matches Framer iframe pattern: .../map.html)
 app.get('/map.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'map_view.html'));
+});
+
+// Map only: stations, no scan UI or support button
+app.get('/blank', (req, res) => {
+    res.sendFile(path.join(__dirname, 'map_blank.html'));
 });
 
 // Serve static files (HTML, JS, CSS) - serves existing files, passes through for non-files
