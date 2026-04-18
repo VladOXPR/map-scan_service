@@ -429,16 +429,16 @@
             left: 50%;
             transform: translate(-50%, -120%);
             width: calc(100% - 40px);
-            max-width: 360px;
+            max-width: 380px;
             background-color: #000000;
             color: #ffffff;
             border-radius: 14px;
-            padding: 12px 16px;
+            padding: 14px 16px;
             z-index: 1000;
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
             display: flex;
-            align-items: flex-start;
-            gap: 12px;
+            flex-direction: column;
+            gap: 10px;
             transition: transform 0.3s ease-out, opacity 0.2s ease-out;
             opacity: 0;
         }
@@ -448,9 +448,11 @@
             opacity: 1;
         }
 
-        .nearest-card-text {
-            flex: 1;
-            min-width: 0;
+        .nearest-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
         }
 
         .nearest-card-label {
@@ -459,29 +461,67 @@
             font-weight: 500;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            margin-bottom: 2px;
         }
 
         .nearest-card-name {
-            font-size: 15px;
+            font-size: 16px;
             font-weight: 600;
-            line-height: 1.2;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            line-height: 1.25;
+            margin-top: 2px;
+            /* Allow wrapping when long */
+            word-break: break-word;
+        }
+
+        .nearest-card-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
         }
 
         .nearest-card-distance {
             color: #0198FD;
             font-size: 13px;
             font-weight: 600;
-            margin-top: 2px;
+        }
+
+        .nearest-card-slots {
+            display: flex;
+            gap: 14px;
+            align-items: center;
+        }
+
+        .nearest-slot {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #ffffff;
+            font-size: 13px;
+        }
+
+        .nearest-slot-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .nearest-slot-dot.filled { background-color: #0198FD; }
+        .nearest-slot-dot.open   { background-color: #808080; }
+
+        .nearest-slot-number {
+            font-weight: 600;
+        }
+
+        .nearest-slot-label {
+            color: #c7c7c7;
+            font-size: 12px;
         }
 
         .nearest-card-note {
             color: #FFB74D;
             font-size: 11px;
-            margin-top: 4px;
         }
 
         .nearest-card-close {
@@ -493,9 +533,33 @@
             cursor: pointer;
             padding: 2px 4px;
             opacity: 0.7;
+            align-self: flex-start;
         }
 
         .nearest-card-close:hover { opacity: 1; }
+
+        .nearest-directions-button {
+            width: 100%;
+            background-color: #0198FD;
+            color: #ffffff;
+            border: none;
+            border-radius: 10px;
+            padding: 12px 14px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-top: 2px;
+        }
+
+        .nearest-directions-button:active {
+            background-color: #0178CD;
+        }
+
+        .nearest-directions-button:focus-visible {
+            outline: 2px solid #ffffff;
+            outline-offset: 2px;
+        }
 
         /* Toast / banner for errors */
         .toast {
@@ -615,13 +679,28 @@
 
     <!-- Nearest-station info card -->
     <div class="nearest-card" id="nearestCard" role="status" aria-live="polite" aria-atomic="true" hidden>
-        <div class="nearest-card-text">
+        <div class="nearest-card-header">
             <div class="nearest-card-label">Nearest station</div>
-            <div class="nearest-card-name" id="nearestCardName"></div>
-            <div class="nearest-card-distance" id="nearestCardDistance"></div>
-            <div class="nearest-card-note" id="nearestCardNote" hidden>Nearest station is far from you</div>
+            <button type="button" class="nearest-card-close" id="nearestCardClose" aria-label="Dismiss nearest station info">&times;</button>
         </div>
-        <button type="button" class="nearest-card-close" id="nearestCardClose" aria-label="Dismiss nearest station info">&times;</button>
+        <div class="nearest-card-name" id="nearestCardName"></div>
+        <div class="nearest-card-meta">
+            <div class="nearest-card-distance" id="nearestCardDistance"></div>
+            <div class="nearest-card-slots">
+                <div class="nearest-slot">
+                    <span class="nearest-slot-dot filled"></span>
+                    <span class="nearest-slot-number" id="nearestFilledSlots">0</span>
+                    <span class="nearest-slot-label">Filled</span>
+                </div>
+                <div class="nearest-slot">
+                    <span class="nearest-slot-dot open"></span>
+                    <span class="nearest-slot-number" id="nearestOpenSlots">0</span>
+                    <span class="nearest-slot-label">Open</span>
+                </div>
+            </div>
+        </div>
+        <div class="nearest-card-note" id="nearestCardNote" hidden>Nearest station is far from you</div>
+        <button type="button" class="nearest-directions-button" id="nearestDirectionsButton">Get Directions</button>
     </div>
 
     <!-- Toast / banner -->

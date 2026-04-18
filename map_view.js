@@ -11,7 +11,8 @@ let selectedStationId = null;
 
 // Nearest-station / geolocation state
 let nearestStationId = null;
-let userCoords = null;                 // { latitude, longitude }
+let nearestStation = null;              // full station object currently shown in the card
+let userCoords = null;                  // { latitude, longitude }
 let userLocationMarker = null;          // mapboxgl.Marker
 let haloPulseInterval = null;
 let pendingLocateAfterStations = false; // user coords arrived before stations list
@@ -322,17 +323,7 @@ async function startMapApp() {
     if (directionsButton) {
         directionsButton.addEventListener('click', () => {
             if (selectedStation) {
-                const { latitude, longitude } = selectedStation;
-                const userAgent = navigator.userAgent || navigator.vendor || window.opera;
-                let directionsUrl;
-                if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
-                    directionsUrl = `maps://maps.google.com/maps?daddr=${latitude},${longitude}`;
-                } else if (/android/i.test(userAgent)) {
-                    directionsUrl = `google.navigation:q=${latitude},${longitude}`;
-                } else {
-                    directionsUrl = `https://maps.google.com/maps?daddr=${latitude},${longitude}`;
-                }
-                window.location.href = directionsUrl;
+                openDirectionsTo(selectedStation.latitude, selectedStation.longitude);
             }
         });
     }
@@ -420,6 +411,22 @@ function hasGeolocation() {
     return typeof navigator !== 'undefined' && 'geolocation' in navigator;
 }
 
+// Open the OS maps app (or web fallback) with directions to the given coords.
+// Shared by the station modal's "Get Directions" button and the nearest-card button.
+function openDirectionsTo(latitude, longitude) {
+    if (latitude == null || longitude == null) return;
+    const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+    let directionsUrl;
+    if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+        directionsUrl = `maps://maps.google.com/maps?daddr=${latitude},${longitude}`;
+    } else if (/android/i.test(userAgent)) {
+        directionsUrl = `google.navigation:q=${latitude},${longitude}`;
+    } else {
+        directionsUrl = `https://maps.google.com/maps?daddr=${latitude},${longitude}`;
+    }
+    window.location.href = directionsUrl;
+}
+
 // --- Toast / banner ---------------------------------------------------------
 function showToast(message, durationMs = 4000) {
     const toast = document.getElementById('locToast');
@@ -441,13 +448,22 @@ function showNearestCard(station, distanceMeters) {
     const card = document.getElementById('nearestCard');
     const name = document.getElementById('nearestCardName');
     const distance = document.getElementById('nearestCardDistance');
+    const filledEl = document.getElementById('nearestFilledSlots');
+    const openEl = document.getElementById('nearestOpenSlots');
     const note = document.getElementById('nearestCardNote');
     if (!card || !name || !distance) return;
+
+    // Remember which station the card currently represents so the
+    // "Get Directions" button can route to the right place.
+    nearestStation = station;
 
     name.textContent = station.title || 'CUUB Station';
     distance.textContent = (window.CuubGeo && window.CuubGeo.formatDistance)
         ? window.CuubGeo.formatDistance(distanceMeters)
         : Math.round(distanceMeters) + ' m';
+
+    if (filledEl) filledEl.textContent = station.filled_slots != null ? station.filled_slots : 0;
+    if (openEl) openEl.textContent = station.open_slots != null ? station.open_slots : 0;
 
     if (note) {
         const isFar = Number.isFinite(distanceMeters) && distanceMeters > FAR_STATION_METERS;
@@ -519,28 +535,55 @@ function applyUserCoords(coords) {
 
     ensureUserMarker(coords);
 
-    // Smooth fly to user; zoom ~16 gives a ~500m-1km visible radius.
-    map.flyTo({
-        center: [coords.longitude, coords.latitude],
-        zoom: 15.8,
-        speed: 0.9,
-        curve: 1.4,
-        essential: true
-    });
-
     // Compute nearest station and update highlight + card.
     const geo = window.CuubGeo;
-    if (!geo || !stations || stations.length === 0) {
+    const result = (geo && stations && stations.length > 0)
+        ? geo.nearestStation(coords, stations)
+        : null;
+
+    // If no nearest station yet, fall back to just centering on the user.
+    if (!result) {
         pendingLocateAfterStations = true;
+        map.flyTo({
+            center: [coords.longitude, coords.latitude],
+            zoom: 15.8,
+            speed: 0.9,
+            curve: 1.4,
+            essential: true
+        });
         return;
     }
-    const result = geo.nearestStation(coords, stations);
-    if (!result) return;
 
     nearestStationId = result.station.id;
     refreshStationsSource();
     startNearestPulse();
     showNearestCard(result.station, result.distanceMeters);
+
+    // Frame the view so BOTH the user and the nearest station are visible.
+    // Padding leaves room for the top info card and the bottom-left button.
+    const stationLng = parseFloat(result.station.longitude);
+    const stationLat = parseFloat(result.station.latitude);
+    if (Number.isFinite(stationLng) && Number.isFinite(stationLat) && typeof mapboxgl !== 'undefined') {
+        const bounds = new mapboxgl.LngLatBounds();
+        bounds.extend([coords.longitude, coords.latitude]);
+        bounds.extend([stationLng, stationLat]);
+
+        const viewportWidth = (typeof window !== 'undefined' && window.innerWidth) || 1024;
+        const isNarrow = viewportWidth < 480;
+        const padding = {
+            top: isNarrow ? 220 : 240,     // top info card
+            bottom: isNarrow ? 120 : 140,  // bottom buttons / station modal room
+            left: isNarrow ? 40 : 80,
+            right: isNarrow ? 40 : 80
+        };
+
+        map.fitBounds(bounds, {
+            padding: padding,
+            maxZoom: 16,
+            duration: 1200,
+            essential: true
+        });
+    }
 }
 
 // --- Geolocation request ----------------------------------------------------
@@ -702,6 +745,16 @@ function dismissLocModal() {
     if (cardClose) {
         cardClose.addEventListener('click', () => {
             hideNearestCard();
+        });
+    }
+
+    // "Get Directions" inside the nearest-station card.
+    const nearestDirectionsBtn = document.getElementById('nearestDirectionsButton');
+    if (nearestDirectionsBtn) {
+        nearestDirectionsBtn.addEventListener('click', () => {
+            if (nearestStation) {
+                openDirectionsTo(nearestStation.latitude, nearestStation.longitude);
+            }
         });
     }
 
