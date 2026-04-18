@@ -299,6 +299,29 @@
         .battery-ad-extension .ad-cta-button:active {
             opacity: 0.9;
         }
+
+        /* "Find nearest station" button overrides (injected by lib/nearest_feature.js) */
+        body .cuub-nearest-button {
+            background-color: #0099FF;
+            color: #ffffff;
+            border: 1px solid transparent;
+            border-radius: 24px;
+            padding: 12px 20px;
+            font-size: 16px;
+            line-height: 1.4;
+            font-weight: 600;
+        }
+
+        body .cuub-nearest-button:hover {
+            background-color: #000000;
+            color: #ffffff;
+            border: 1px solid #ffffff;
+            transform: none;
+        }
+
+        body .cuub-nearest-button:active {
+            transform: scale(0.97);
+        }
     </style>
 </head>
 <body>
