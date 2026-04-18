@@ -8,6 +8,16 @@ let stations = [];
 // Handle returned by lib/nearest_feature.js (same module used on the main map).
 let nearestFeature = null;
 
+// Read a query-string flag from the current URL. Returns null on errors.
+function getQueryFlag(name) {
+    try {
+        const url = new URL(window.location.href);
+        return url.searchParams.get(name);
+    } catch (_) {
+        return null;
+    }
+}
+
 function stationsToGeoJSON(stationList) {
     return {
         type: 'FeatureCollection',
@@ -183,11 +193,16 @@ async function startMapApp() {
         pitch: 45
     });
     // Attach shared nearest-station feature (injects its own DOM + CSS).
+    // ?embed=1 in the URL hides the built-in trigger button and disables the
+    // auto-prompt so a parent page (e.g. Framer) can own the trigger via postMessage.
     if (window.CuubNearest && window.CuubNearest.attach) {
+        const embedMode = getQueryFlag('embed') === '1';
         nearestFeature = window.CuubNearest.attach({
             map: map,
             mapboxgl: mapboxgl,
-            isStickerPage: false
+            isStickerPage: false,
+            hideTriggerButton: embedMode,
+            disableAutoPrompt: embedMode
         });
     }
 

@@ -254,11 +254,16 @@ async function startMapApp() {
     });
 
     // Attach the shared nearest-station feature (works on both /, /map, and /{sticker_id}).
+    // ?embed=1 in the URL hides the built-in trigger button and disables the
+    // auto-prompt so a parent page (e.g. Framer) can own the trigger via postMessage.
     if (window.CuubNearest && window.CuubNearest.attach) {
+        const embedMode = getQueryFlag('embed') === '1';
         nearestFeature = window.CuubNearest.attach({
             map: map,
             mapboxgl: mapboxgl,
-            isStickerPage: !!getStickerIdFromURL()
+            isStickerPage: !!getStickerIdFromURL(),
+            hideTriggerButton: embedMode,
+            disableAutoPrompt: embedMode
         });
     }
 
@@ -268,6 +273,16 @@ async function startMapApp() {
 }
 
 startMapApp();
+
+// Read a query-string flag from the current URL. Returns null on errors.
+function getQueryFlag(name) {
+    try {
+        const url = new URL(window.location.href);
+        return url.searchParams.get(name);
+    } catch (_) {
+        return null;
+    }
+}
 
 // Get sticker_id from URL path (if available)
 function getStickerIdFromURL() {
