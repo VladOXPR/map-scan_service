@@ -295,6 +295,260 @@
         .battery-ad-extension .ad-cta-button:active {
             opacity: 0.9;
         }
+
+        /* Find-nearest-station re-open button (bottom left, mirrors support button) */
+        .nearest-button {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background-color: #000000;
+            color: #ffffff;
+            border: none;
+            border-radius: 28px;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s, bottom 0.3s ease-out;
+            white-space: nowrap;
+        }
+
+        .nearest-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        .nearest-button:active {
+            transform: scale(0.95);
+        }
+
+        .nearest-button:focus-visible {
+            outline: 2px solid #0198FD;
+            outline-offset: 2px;
+        }
+
+        /* Location prompt modal */
+        .loc-backdrop {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.55);
+            z-index: 2000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease-out;
+        }
+
+        .loc-backdrop.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .loc-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.96);
+            width: calc(100% - 40px);
+            max-width: 380px;
+            background-color: #000000;
+            color: #ffffff;
+            border-radius: 16px;
+            padding: 24px;
+            z-index: 2001;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+        }
+
+        .loc-modal.active {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .loc-modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .loc-modal-desc {
+            font-size: 14px;
+            color: #c7c7c7;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+
+        .loc-modal-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .loc-btn {
+            flex: 1;
+            padding: 12px 14px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: background-color 0.2s, opacity 0.2s;
+        }
+
+        .loc-btn-primary {
+            background-color: #0198FD;
+            color: #ffffff;
+        }
+
+        .loc-btn-primary:active {
+            background-color: #0178CD;
+        }
+
+        .loc-btn-secondary {
+            background-color: transparent;
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+        }
+
+        .loc-btn-secondary:active {
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .loc-btn:focus-visible {
+            outline: 2px solid #0198FD;
+            outline-offset: 2px;
+        }
+
+        /* Nearest-station info card */
+        .nearest-card {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translate(-50%, -120%);
+            width: calc(100% - 40px);
+            max-width: 360px;
+            background-color: #000000;
+            color: #ffffff;
+            border-radius: 14px;
+            padding: 12px 16px;
+            z-index: 1000;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            transition: transform 0.3s ease-out, opacity 0.2s ease-out;
+            opacity: 0;
+        }
+
+        .nearest-card.active {
+            transform: translate(-50%, 0);
+            opacity: 1;
+        }
+
+        .nearest-card-text {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .nearest-card-label {
+            color: #808080;
+            font-size: 11px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 2px;
+        }
+
+        .nearest-card-name {
+            font-size: 15px;
+            font-weight: 600;
+            line-height: 1.2;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .nearest-card-distance {
+            color: #0198FD;
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+
+        .nearest-card-note {
+            color: #FFB74D;
+            font-size: 11px;
+            margin-top: 4px;
+        }
+
+        .nearest-card-close {
+            background: transparent;
+            border: none;
+            color: #ffffff;
+            font-size: 22px;
+            line-height: 1;
+            cursor: pointer;
+            padding: 2px 4px;
+            opacity: 0.7;
+        }
+
+        .nearest-card-close:hover { opacity: 1; }
+
+        /* Toast / banner for errors */
+        .toast {
+            position: fixed;
+            bottom: 90px;
+            left: 50%;
+            transform: translate(-50%, 20px);
+            background-color: #000000;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 10px 16px;
+            border-radius: 10px;
+            z-index: 1500;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+            max-width: calc(100% - 40px);
+            text-align: center;
+        }
+
+        .toast.active {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+
+        /* User location marker (injected via JS) */
+        .user-location-marker {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #0198FD;
+            border: 3px solid #ffffff;
+            box-shadow: 0 0 0 2px rgba(1, 152, 253, 0.35);
+            position: relative;
+        }
+
+        .user-location-marker::after {
+            content: '';
+            position: absolute;
+            inset: -10px;
+            border-radius: 50%;
+            background-color: rgba(1, 152, 253, 0.25);
+            animation: user-pulse 1.8s ease-out infinite;
+        }
+
+        @keyframes user-pulse {
+            0% { transform: scale(0.6); opacity: 0.8; }
+            100% { transform: scale(1.6); opacity: 0; }
+        }
+
+        [hidden] { display: none !important; }
     </style>
 </head>
 <body>
@@ -354,6 +608,43 @@
         <span class="support-text">Text Support</span>
     </div>
 
+    <!-- Find nearest station (re-open geolocation flow) -->
+    <button type="button" class="nearest-button" id="nearestButton" title="Find nearest station" hidden>
+        Find nearest station
+    </button>
+
+    <!-- Nearest-station info card -->
+    <div class="nearest-card" id="nearestCard" role="status" aria-live="polite" aria-atomic="true" hidden>
+        <div class="nearest-card-text">
+            <div class="nearest-card-label">Nearest station</div>
+            <div class="nearest-card-name" id="nearestCardName"></div>
+            <div class="nearest-card-distance" id="nearestCardDistance"></div>
+            <div class="nearest-card-note" id="nearestCardNote" hidden>Nearest station is far from you</div>
+        </div>
+        <button type="button" class="nearest-card-close" id="nearestCardClose" aria-label="Dismiss nearest station info">&times;</button>
+    </div>
+
+    <!-- Toast / banner -->
+    <div class="toast" id="locToast" role="status" aria-live="polite" hidden></div>
+
+    <!-- Location prompt modal -->
+    <div class="loc-backdrop" id="locBackdrop" hidden></div>
+    <div class="loc-modal"
+         id="locModal"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="locModalTitle"
+         aria-describedby="locModalDesc"
+         hidden>
+        <h2 class="loc-modal-title" id="locModalTitle">Find stations near you</h2>
+        <p class="loc-modal-desc" id="locModalDesc">Share your location to see the nearest CUUB station?</p>
+        <div class="loc-modal-actions">
+            <button type="button" class="loc-btn loc-btn-secondary" id="locBtnNo">Not now</button>
+            <button type="button" class="loc-btn loc-btn-primary" id="locBtnYes">Yes, share location</button>
+        </div>
+    </div>
+
+    <script src="lib/geo.js"></script>
     <script src="map_view.js"></script>
     <script src="scan_service.js"></script>
 </body>
