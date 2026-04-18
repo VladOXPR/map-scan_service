@@ -9,6 +9,9 @@ app.use((req, res, next) => {
     // Permit any parent origin to frame this app (replaces restrictive X-Frame-Options)
     res.setHeader('Content-Security-Policy', 'frame-ancestors *');
     res.removeHeader('X-Frame-Options');
+    // Allow geolocation inside cross-origin iframes. The parent page MUST still
+    // include allow="geolocation" on the <iframe> tag for browsers to delegate it.
+    res.setHeader('Permissions-Policy', 'geolocation=*');
     next();
 });
 
