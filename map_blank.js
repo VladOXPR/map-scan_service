@@ -1,9 +1,12 @@
-// Minimal map: stations + clustering only (no modals, no scan, no support)
+// Minimal map: stations + clustering + "find nearest station" feature.
+// No station details modal, no scan service, no support button.
 
 const STATIONS_API = '/api/stations';
 
 let map;
 let stations = [];
+// Handle returned by lib/nearest_feature.js (same module used on the main map).
+let nearestFeature = null;
 
 function stationsToGeoJSON(stationList) {
     return {
@@ -34,6 +37,7 @@ async function fetchStations() {
         if (result.success && result.data) {
             stations = result.data;
             addMarkersToMap(stations);
+            if (nearestFeature) nearestFeature.setStations(stations);
         } else {
             console.error('Failed to fetch stations:', result);
         }
@@ -178,6 +182,15 @@ async function startMapApp() {
         bearing: 0.00,
         pitch: 45
     });
+    // Attach shared nearest-station feature (injects its own DOM + CSS).
+    if (window.CuubNearest && window.CuubNearest.attach) {
+        nearestFeature = window.CuubNearest.attach({
+            map: map,
+            mapboxgl: mapboxgl,
+            isStickerPage: false
+        });
+    }
+
     map.on('load', () => {
         fetchStations();
     });
