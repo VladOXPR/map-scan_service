@@ -267,19 +267,7 @@ async function startMapApp() {
     mapboxgl.accessToken = data.token;
     map = new mapboxgl.Map({
         container: 'map',
-        style: 'mapbox://styles/mapbox/standard',
-        config: {
-            basemap: {
-                lightPreset: 'night',
-                showPedestrianRoads: false,
-                showPlaceLabels: false,
-                showPointOfInterestLabels: false,
-                showTransitLabels: false,
-                showAdminBoundaries: false,
-                show3dFacades: true,
-                theme: 'faded'
-            }
-        },
+        style: 'mapbox://styles/mapbox/dark-v11',
         center: [-87.65, 41.9295],
         zoom: 13.5,
         bearing: 0.00,
