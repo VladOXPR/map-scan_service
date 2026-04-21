@@ -2,8 +2,6 @@
 // This file handles the scan view when accessing /{sticker_id}
 
 let durationTimer = null;
-let adExtensionTimeout = null;
-let currentBatteryData = null; // Store battery data for sizl tap recording
 
 // Parse duration string (HH:MM:SS) to total seconds
 function parseDurationToSeconds(durationString) {
@@ -87,23 +85,6 @@ async function fetchBatteryData(stickerId) {
     }
 }
 
-// Record sizl redirect tap (PATCH battery with sizl: true)
-async function recordSizlTap(stickerId, manufactureId) {
-    if (!stickerId || !manufactureId) return;
-    try {
-        await fetch(`/api/battery/${stickerId}`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'manufacture_id': manufactureId
-            },
-            body: JSON.stringify({ sizl: true })
-        });
-    } catch (error) {
-        console.error('Error recording sizl tap:', error);
-    }
-}
-
 // Create scan record
 async function createScanRecord(stickerId, manufactureId, stickerType) {
     try {
@@ -136,19 +117,8 @@ async function createScanRecord(stickerId, manufactureId, stickerType) {
 function showBatteryModal(batteryData) {
     const modal = document.getElementById('batteryModal');
     const paidElement = document.getElementById('batteryPaid');
-    const adExtension = document.getElementById('batteryAdExtension');
     
     if (batteryData && modal) {
-        currentBatteryData = batteryData;
-        // Clear any pending ad extension timeout
-        if (adExtensionTimeout) {
-            clearTimeout(adExtensionTimeout);
-            adExtensionTimeout = null;
-        }
-        if (adExtension) {
-            adExtension.classList.remove('visible');
-        }
-        
         const durationElement = document.getElementById('batteryDuration');
         const isReturned = batteryData.duration && String(batteryData.duration).toLowerCase() === 'battery returned';
         
@@ -165,29 +135,13 @@ function showBatteryModal(batteryData) {
         
         // Show modal
         modal.classList.add('active');
-        
-        // Show ad extension 1 second after modal loads
-        adExtensionTimeout = setTimeout(() => {
-            if (adExtension && modal.classList.contains('active')) {
-                adExtension.classList.add('visible');
-            }
-            adExtensionTimeout = null;
-        }, 1000);
     }
 }
 
 // Hide battery info modal
 function hideBatteryModal() {
     const modal = document.getElementById('batteryModal');
-    const adExtension = document.getElementById('batteryAdExtension');
     
-    if (adExtensionTimeout) {
-        clearTimeout(adExtensionTimeout);
-        adExtensionTimeout = null;
-    }
-    if (adExtension) {
-        adExtension.classList.remove('visible');
-    }
     if (modal) {
         modal.classList.remove('active');
         // Stop the timer when modal is hidden
@@ -195,31 +149,8 @@ function hideBatteryModal() {
     }
 }
 
-// Initialize Try sizl button click handler
-function initSizlButton() {
-    const sizlButton = document.getElementById('sizlRedirectButton');
-    if (!sizlButton) return;
-    
-    sizlButton.addEventListener('click', (e) => {
-        e.preventDefault();
-        const stickerId = getStickerIdFromPath();
-        const manufactureId = currentBatteryData?.manufacture_id;
-        const redirectUrl = sizlButton.getAttribute('href');
-        
-        // Record the tap (fire-and-forget), then redirect
-        if (stickerId && manufactureId) {
-            recordSizlTap(stickerId, manufactureId);
-        }
-        if (redirectUrl) {
-            window.location.href = redirectUrl;
-        }
-    });
-}
-
 // Initialize scan service
 function initScanService() {
-    initSizlButton();
-    
     const stickerId = getStickerIdFromPath();
     
     if (stickerId) {

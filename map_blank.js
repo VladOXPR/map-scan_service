@@ -56,8 +56,45 @@ async function fetchStations() {
     }
 }
 
-function addMarkersToMap(stationList) {
+// Preload Icon0.svg ... Icon6.svg and register one Mapbox image per filled-slot
+// count. Each SVG is rasterized at 2x for retina sharpness. Cached as a Promise
+// so repeated calls are cheap.
+const STATION_ICON_COUNT = 7; // Icon0.svg ... Icon6.svg
+let stationIconsPromise = null;
+function loadStationIcons() {
+    if (stationIconsPromise) return stationIconsPromise;
+    const scale = 2;
+    const loaders = [];
+    for (let i = 0; i < STATION_ICON_COUNT; i++) {
+        loaders.push(new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                const w = img.naturalWidth || 54;
+                const h = img.naturalHeight || 53;
+                const canvas = document.createElement('canvas');
+                canvas.width = w * scale;
+                canvas.height = h * scale;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const id = `station-icon-${i}`;
+                if (!map.hasImage(id)) {
+                    map.addImage(id, data, { pixelRatio: scale });
+                }
+                resolve();
+            };
+            img.onerror = reject;
+            img.src = `/Icon${i}.svg`;
+        }));
+    }
+    stationIconsPromise = Promise.all(loaders);
+    return stationIconsPromise;
+}
+
+async function addMarkersToMap(stationList) {
     const geojson = stationsToGeoJSON(stationList);
+
+    await loadStationIcons();
 
     map.addSource('stations', {
         type: 'geojson',
@@ -126,14 +163,25 @@ function addMarkersToMap(stationList) {
 
     map.addLayer({
         id: 'unclustered-point',
-        type: 'circle',
+        type: 'symbol',
         source: 'stations',
         filter: ['!', ['has', 'point_count']],
-        paint: {
-            'circle-color': '#0198FD',
-            'circle-radius': 15,
-            'circle-stroke-width': 3,
-            'circle-stroke-color': '#ffffff'
+        layout: {
+            'icon-image': [
+                'match',
+                ['min', 6, ['to-number', ['coalesce', ['get', 'filled_slots'], 6]]],
+                0, 'station-icon-0',
+                1, 'station-icon-1',
+                2, 'station-icon-2',
+                3, 'station-icon-3',
+                4, 'station-icon-4',
+                5, 'station-icon-5',
+                6, 'station-icon-6',
+                'station-icon-6'
+            ],
+            'icon-size': 1,
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true
         }
     });
 
