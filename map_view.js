@@ -232,8 +232,21 @@ function selectStation(station) {
 
 function showStationModal(station) {
     modalTitle.textContent = station.title || 'Title';
-    filledSlots.textContent = station.filled_slots || 0;
-    openSlots.textContent = station.open_slots || 0;
+
+    // If slot data hasn't loaded for this station, hide the slot readouts
+    // entirely and just show the title.
+    const hasFilled = station.filled_slots !== null && station.filled_slots !== undefined && station.filled_slots !== '';
+    const hasOpen = station.open_slots !== null && station.open_slots !== undefined && station.open_slots !== '';
+    const slotsContainer = modal.querySelector('.modal-slots');
+    if (slotsContainer) {
+        if (hasFilled || hasOpen) {
+            slotsContainer.style.display = '';
+            filledSlots.textContent = hasFilled ? station.filled_slots : 0;
+            openSlots.textContent = hasOpen ? station.open_slots : 0;
+        } else {
+            slotsContainer.style.display = 'none';
+        }
+    }
 
     modal.classList.add('active');
 
