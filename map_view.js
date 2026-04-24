@@ -115,8 +115,8 @@ async function addMarkersToMap(stations) {
         type: 'geojson',
         data: geojson,
         cluster: true,
-        clusterMaxZoom: 13,
-        clusterRadius: 50,
+        clusterMaxZoom: 22,   // let clusterRadius govern at every zoom
+        clusterRadius: 60,    // pixel-distance threshold for merging points
         clusterProperties: {}
     });
 
@@ -136,13 +136,16 @@ async function addMarkersToMap(stations) {
             'circle-radius': [
                 'step',
                 ['get', 'point_count'],
-                20,
-                10, 30,
-                30, 30
+                15,  // radius for 1-2 points
+                3, 20,  // radius for 3+ points
+                5, 25   // radius for 5+ points
             ],
             'circle-stroke-width': 3,
             'circle-stroke-color': '#ffffff',
-            'circle-stroke-opacity': 1
+            'circle-stroke-opacity': 1,
+            // Snap instantly between cluster buckets instead of the default 300ms fade.
+            'circle-radius-transition': { duration: 0, delay: 0 },
+            'circle-color-transition': { duration: 0, delay: 0 }
         }
     });
 
@@ -284,7 +287,10 @@ async function startMapApp() {
         center: [-87.65, 41.9295],
         zoom: 13.5,
         bearing: 0.00,
-        pitch: 45
+        pitch: 45,
+        // Disable symbol label-collision fade so cluster-count text snaps
+        // between buckets instead of crossfading.
+        fadeDuration: 0
     });
 
     if (directionsButton) {
