@@ -101,7 +101,7 @@ async function addMarkersToMap(stationList) {
         data: geojson,
         cluster: true,
         clusterMaxZoom: 22,   // let clusterRadius govern at every zoom
-        clusterRadius: 60,    // pixel-distance threshold for merging points
+        clusterRadius: 25,    // only merge points within ~25px of each other
         clusterProperties: {}
     });
 
