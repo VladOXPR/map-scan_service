@@ -353,7 +353,7 @@ function getStickerIdFromURL() {
 const supportButton = document.getElementById('supportButton');
 if (supportButton) {
     supportButton.addEventListener('click', () => {
-        const phoneNumber = '+1464237744';
+        const phoneNumber = '+14642377449';
         const stickerId = getStickerIdFromURL();
         let smsUrl = `sms:${phoneNumber}`;
         if (stickerId) {
