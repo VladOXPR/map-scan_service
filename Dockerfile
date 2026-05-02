@@ -1,23 +1,31 @@
-# Use the official Node.js runtime as the base image
-FROM node:18-slim
-
-# Set the working directory in the container
+FROM node:20-slim AS deps
 WORKDIR /app
+COPY package.json package-lock.json* ./
+COPY apps/web/package.json apps/web/package.json
+COPY packages/shared/package.json packages/shared/package.json
+RUN npm install --workspaces --include-workspace-root --no-audit --no-fund
 
-# Copy package.json and package-lock.json
-COPY package*.json ./
-
-# Install dependencies
-RUN npm ci --only=production
-
-# Copy the rest of the application code
+FROM node:20-slim AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY . .
+RUN npm run web:build
 
-# Expose the port the app runs on
+FROM node:20-slim AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=8080
 EXPOSE 8080
 
-# Set PORT environment variable (Cloud Run will override this)
-ENV PORT=8080
+COPY --from=builder /app/apps/web/.next ./apps/web/.next
+COPY --from=builder /app/apps/web/public ./apps/web/public
+COPY --from=builder /app/apps/web/package.json ./apps/web/package.json
+COPY --from=builder /app/apps/web/next.config.mjs ./apps/web/next.config.mjs
+COPY --from=builder /app/packages/shared ./packages/shared
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=builder /app/package.json ./package.json
 
-# Start the application
-CMD ["node", "server.js"]
+WORKDIR /app/apps/web
+CMD ["npx", "next", "start", "-p", "8080"]

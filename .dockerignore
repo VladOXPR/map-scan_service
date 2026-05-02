@@ -1,6 +1,8 @@
-node_modules
-npm-debug.log
+**/node_modules
+**/npm-debug.log
 .env
+**/.env
+**/.env.local
 .git
 .gitignore
 .vercel
@@ -9,3 +11,18 @@ npm-debug.log
 coverage
 .vscode
 .idea
+
+# Build artifacts
+**/.next
+**/.expo
+**/.expo-shared
+**/dist
+apps/mobile/ios
+apps/mobile/android
+
+# Legacy assets we don't ship to Cloud Run
+tt_hoves_pro
+sushi_burger.png
+sushi_burger.webp
+customer-service.png
+DEPLOYMENT.md

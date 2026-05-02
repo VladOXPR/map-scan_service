@@ -1,0 +1,46 @@
+diff --git a/node_modules/@rnmapbox/maps/src/specs/NativeRNMBXLocationModule.ts b/node_modules/@rnmapbox/maps/src/specs/NativeRNMBXLocationModule.ts
+index 363d56b..b346562 100644
+--- a/node_modules/@rnmapbox/maps/src/specs/NativeRNMBXLocationModule.ts
++++ b/node_modules/@rnmapbox/maps/src/specs/NativeRNMBXLocationModule.ts
+@@ -1,19 +1,15 @@
+ import { TurboModule, TurboModuleRegistry} from "react-native";
+-import type { EventEmitter } from 'react-native/Libraries/Types/CodegenTypes';
+ 
+-type LocationEvent = {
+-  type: string //"userlocationdupdated"
+-  payload: {
+-    coords: {
+-      latitude: number
+-      longitude: number
+-      altitude: number
+-      accuracy: number
+-      speed: number
+-      heading: number
+-    }
+-    timestamp: number
++type LocationPayload = {
++  coords: {
++    latitude: number
++    longitude: number
++    altitude: number
++    accuracy: number
++    speed: number
++    heading: number
+   }
++  timestamp: number
+ }
+ 
+ export interface Spec extends TurboModule {
+@@ -21,11 +17,9 @@ export interface Spec extends TurboModule {
+   stop(): void
+   setRequestsAlwaysUse(requestsAlwaysUse: boolean): void
+   setMinDisplacement(minDisplacement: number): void
+-  getLastKnownLocation(): Promise<LocationEvent['payload']>
++  getLastKnownLocation(): Promise<LocationPayload>
+   simulateHeading(changesPerSecond: number, increment: number): void
+   setLocationEventThrottle(throttle: number): void
+-
+-  readonly onLocationUpdate: EventEmitter<LocationEvent>
+ }
+ 
+ export default TurboModuleRegistry.getEnforcing<Spec>('RNMBXLocationModule');

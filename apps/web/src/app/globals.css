@@ -1,0 +1,496 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Oxygen, Ubuntu, Cantarell, sans-serif;
+  overflow: hidden;
+  background-color: #000;
+}
+
+#__next,
+#__next > * {
+  height: 100%;
+  width: 100%;
+}
+
+.cuub-map {
+  width: 100%;
+  height: 100vh;
+  min-height: 100%;
+}
+
+/* Station modal */
+.station-modal {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translate(-50%, 100%);
+  max-width: 500px;
+  width: 100%;
+  background-color: #000;
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  padding: 20px 20px 30px;
+  transition: transform 0.3s ease-out;
+  z-index: 1000;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.station-modal.active {
+  transform: translate(-50%, 0);
+}
+
+.modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.modal-title {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.modal-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.slot-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slot-icon {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.slot-icon.filled {
+  background-color: #0198fd;
+}
+
+.slot-icon.open {
+  background-color: #808080;
+}
+
+.slot-text {
+  color: #fff;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.slot-number {
+  font-weight: 600;
+}
+
+.directions-button {
+  width: 100%;
+  background-color: #0198fd;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.directions-button:active {
+  background-color: #0178cd;
+}
+
+.mapboxgl-marker {
+  cursor: pointer;
+}
+
+/* Support button */
+.support-button {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background-color: #000;
+  border-radius: 28px;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s, box-shadow 0.2s, bottom 0.3s ease-out;
+  border: none;
+}
+
+.support-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.support-button:active {
+  transform: scale(0.95);
+}
+
+.support-text {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Battery modal */
+.battery-modal {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  max-width: 500px;
+  width: 100%;
+  background-color: #000;
+  border-bottom-left-radius: 20px;
+  border-bottom-right-radius: 20px;
+  padding: 20px;
+  transition: transform 0.3s ease-out;
+  z-index: 1001;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.battery-modal.active {
+  transform: translate(-50%, 0);
+}
+
+.battery-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.battery-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.battery-label {
+  color: #808080;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.battery-value {
+  color: #fff;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.battery-duration {
+  flex: 1;
+}
+
+.battery-paid {
+  text-align: right;
+}
+
+/* Nearest-station UI */
+.cuub-nearest-button {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  background-color: #000;
+  color: #fff;
+  border: none;
+  border-radius: 28px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s, box-shadow 0.2s, bottom 0.3s ease-out;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+.cuub-nearest-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.cuub-loc-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.55);
+  z-index: 2000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease-out;
+}
+
+.cuub-loc-backdrop.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.cuub-loc-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.96);
+  width: calc(100% - 40px);
+  max-width: 380px;
+  background-color: #000;
+  color: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  z-index: 2001;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+}
+
+.cuub-loc-modal.active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.cuub-loc-modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.cuub-loc-modal-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.cuub-loc-btn {
+  flex: 1;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background-color 0.2s, opacity 0.2s;
+}
+
+.cuub-loc-btn-primary {
+  background-color: #0198fd;
+  color: #fff;
+}
+
+.cuub-loc-btn-secondary {
+  background-color: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.cuub-nearest-card {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translate(-50%, -120%);
+  width: calc(100% - 40px);
+  max-width: 380px;
+  background-color: #000;
+  color: #fff;
+  border-radius: 14px;
+  padding: 14px 16px;
+  z-index: 1000;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: transform 0.3s ease-out, opacity 0.2s ease-out;
+  opacity: 0;
+}
+
+.cuub-nearest-card.active {
+  transform: translate(-50%, 0);
+  opacity: 1;
+}
+
+body.cuub-sticker-page .cuub-nearest-card {
+  top: 290px;
+}
+
+.cuub-nearest-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cuub-nearest-card-label {
+  color: #808080;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cuub-nearest-card-name {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 2px;
+  word-break: break-word;
+}
+
+.cuub-nearest-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cuub-nearest-card-distance {
+  color: #0198fd;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cuub-nearest-card-slots {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.cuub-nearest-slot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  font-size: 13px;
+}
+
+.cuub-nearest-slot-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.cuub-nearest-slot-dot.filled {
+  background-color: #0198fd;
+}
+
+.cuub-nearest-slot-dot.open {
+  background-color: #808080;
+}
+
+.cuub-nearest-card-note {
+  color: #ffb74d;
+  font-size: 11px;
+}
+
+.cuub-nearest-card-close {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+  opacity: 0.7;
+  align-self: flex-start;
+}
+
+.cuub-nearest-directions-button {
+  width: 100%;
+  background-color: #0198fd;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.cuub-toast {
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translate(-50%, 20px);
+  background-color: #000;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 16px;
+  border-radius: 10px;
+  z-index: 1500;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+  max-width: calc(100% - 40px);
+  text-align: center;
+}
+
+.cuub-toast.active {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.cuub-user-location-marker {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: #0198fd;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 2px rgba(1, 152, 253, 0.35);
+  position: relative;
+}
+
+.cuub-user-location-marker::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  background-color: rgba(1, 152, 253, 0.25);
+  animation: cuub-user-pulse 1.8s ease-out infinite;
+}
+
+@keyframes cuub-user-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}

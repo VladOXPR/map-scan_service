@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "CUUB",
+    "slug": "cuub-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "cuub",
+    "newArchEnabled": false,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "tech.cuub.mobile",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "CUUB uses your location to find the nearest station."
+      }
+    },
+    "android": {
+      "package": "tech.cuub.mobile",
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "@rnmapbox/maps",
+        {
+          "RNMapboxMapsImpl": "mapbox"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "CUUB uses your location to find the nearest station."
+        }
+      ]
+    ],
+    "extra": {
+      "router": { "origin": false },
+      "cuubApiBase": "",
+      "mapboxAccessToken": ""
+    }
+  }
+}
