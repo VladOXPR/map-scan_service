@@ -113,36 +113,39 @@ async function createScanRecord(stickerId, manufactureId, stickerType) {
     }
 }
 
-// Show battery info modal. Pass `null` (or omit) when the battery fetch
-// failed - the modal will still open with a default $4 paid amount and
-// the duration/countdown section hidden.
+// Show battery info modal. Skips opening the modal entirely when there's
+// no real data to show (battery fetch failed, or amountPaid is 0/missing) —
+// we'd rather show nothing than display a placeholder $0/$4 next to a
+// running timer, which misleads the user about what they've been charged.
+// Mirrors how the station modal hides the slot readouts when slot counts
+// aren't available.
 function showBatteryModal(batteryData) {
     const modal = document.getElementById('batteryModal');
-    const paidElement = document.getElementById('batteryPaid');
-    const durationBlock = modal ? modal.querySelector('.battery-duration') : null;
-
     if (!modal) return;
 
-    if (batteryData) {
-        const durationElement = document.getElementById('batteryDuration');
-        const isReturned = batteryData.duration && String(batteryData.duration).toLowerCase() === 'battery returned';
-
-        if (isReturned) {
-            if (durationElement) durationElement.textContent = 'Battery returned';
-            stopDurationTimer();
-        } else {
-            const initialDuration = batteryData.duration || '00:00:00';
-            startDurationTimer(initialDuration);
-        }
-
-        paidElement.textContent = `$${batteryData.amountPaid || 0}`;
-        if (durationBlock) durationBlock.style.display = '';
-    } else {
-        // Fallback when rent/battery data failed to load.
+    const amountPaid = batteryData ? Number(batteryData.amountPaid) : 0;
+    const hasRealData = batteryData && Number.isFinite(amountPaid) && amountPaid > 0;
+    if (!hasRealData) {
         stopDurationTimer();
-        if (durationBlock) durationBlock.style.display = 'none';
-        paidElement.textContent = '$4';
+        modal.classList.remove('active');
+        return;
     }
+
+    const paidElement = document.getElementById('batteryPaid');
+    const durationBlock = modal.querySelector('.battery-duration');
+    const durationElement = document.getElementById('batteryDuration');
+
+    const isReturned = batteryData.duration && String(batteryData.duration).toLowerCase() === 'battery returned';
+    if (isReturned) {
+        if (durationElement) durationElement.textContent = 'Battery returned';
+        stopDurationTimer();
+    } else {
+        const initialDuration = batteryData.duration || '00:00:00';
+        startDurationTimer(initialDuration);
+    }
+
+    if (paidElement) paidElement.textContent = `$${amountPaid}`;
+    if (durationBlock) durationBlock.style.display = '';
 
     modal.classList.add('active');
 }
@@ -161,24 +164,20 @@ function hideBatteryModal() {
 // Initialize scan service
 function initScanService() {
     const stickerId = getStickerIdFromPath();
-    
-    if (stickerId) {
-        // Fetch and display battery data
-        fetchBatteryData(stickerId).then(batteryData => {
-            if (batteryData) {
-                showBatteryModal(batteryData);
+    if (!stickerId) return;
 
-                // Immediately create scan record after fetching battery data
-                // sticker_type comes from battery table "type" column (returned by GET battery)
-                if (batteryData.manufacture_id) {
-                    createScanRecord(stickerId, batteryData.manufacture_id, batteryData.type);
-                }
-            } else {
-                // Rent data failed to load - show fallback modal with $4 and no duration.
-                showBatteryModal(null);
-            }
-        });
-    }
+    fetchBatteryData(stickerId).then(batteryData => {
+        // showBatteryModal handles the "no real data" case itself by
+        // leaving the modal closed, so we don't need a separate fallback.
+        showBatteryModal(batteryData);
+
+        // Always create the scan record when we have a manufacture_id,
+        // regardless of whether the modal opened. sticker_type comes from
+        // the battery table "type" column (returned by GET battery).
+        if (batteryData && batteryData.manufacture_id) {
+            createScanRecord(stickerId, batteryData.manufacture_id, batteryData.type);
+        }
+    });
 }
 
 // Initialize when DOM is ready
