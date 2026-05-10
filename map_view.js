@@ -50,66 +50,75 @@ function refreshStationsSource() {
     source.setData(stationsToGeoJSON(stations, selectedStationId));
 }
 
-// Fetch stations from CUUB API
-async function fetchStations() {
+// Fetch stations from CUUB API. Returns the stations array (or [] on failure)
+// so callers can run this in parallel with other startup work.
+async function fetchStationsData() {
     try {
         const response = await fetch(STATIONS_API);
         const result = await response.json();
-
-        if (result.success && result.data) {
-            stations = result.data;
-            addMarkersToMap(stations);
-            // Hand the list to the nearest-station feature so it can complete any
-            // pending geolocation flow and highlight the suggested station.
-            if (nearestFeature) nearestFeature.setStations(stations);
-        } else {
-            console.error('Failed to fetch stations:', result);
-        }
+        if (result && result.success && result.data) return result.data;
+        console.error('Failed to fetch stations:', result);
     } catch (error) {
         console.error('Error fetching stations:', error);
     }
+    return [];
 }
 
-// Preload Icon0.svg ... Icon6.svg and register one Mapbox image per filled-slot
-// count. Each SVG is rasterized at 2x for retina sharpness. Cached as a Promise
-// so repeated calls are cheap.
+// Two-step icon pipeline so SVG downloads can run in parallel with the map's
+// own style/tiles loading instead of serially after `map.on('load')`:
+//   1. preloadStationIconImages() downloads Icon0.svg ... Icon6.svg into <img>
+//      elements as soon as the page script runs. No map dependency.
+//   2. registerStationIcons(images) rasterizes each <img> at 2x and registers
+//      it via map.addImage(). Must run after the map's style is loaded.
+// A single failed icon no longer blocks the rest — we resolve to null for that
+// slot and fall back to whichever icon is available at render time.
 const STATION_ICON_COUNT = 7; // Icon0.svg ... Icon6.svg
-let stationIconsPromise = null;
-function loadStationIcons() {
-    if (stationIconsPromise) return stationIconsPromise;
-    const scale = 2;
+let stationIconImagesPromise = null;
+function preloadStationIconImages() {
+    if (stationIconImagesPromise) return stationIconImagesPromise;
     const loaders = [];
     for (let i = 0; i < STATION_ICON_COUNT; i++) {
-        loaders.push(new Promise((resolve, reject) => {
+        loaders.push(new Promise((resolve) => {
             const img = new Image();
-            img.onload = () => {
-                const w = img.naturalWidth || 54;
-                const h = img.naturalHeight || 53;
-                const canvas = document.createElement('canvas');
-                canvas.width = w * scale;
-                canvas.height = h * scale;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const id = `station-icon-${i}`;
-                if (!map.hasImage(id)) {
-                    map.addImage(id, data, { pixelRatio: scale });
-                }
-                resolve();
+            img.onload = () => resolve(img);
+            img.onerror = () => {
+                console.error(`Failed to load /Icon${i}.svg`);
+                resolve(null);
             };
-            img.onerror = reject;
             img.src = `/Icon${i}.svg`;
         }));
     }
-    stationIconsPromise = Promise.all(loaders);
-    return stationIconsPromise;
+    stationIconImagesPromise = Promise.all(loaders);
+    return stationIconImagesPromise;
 }
 
-// Add markers to the map with clustering
-async function addMarkersToMap(stations) {
-    const geojson = stationsToGeoJSON(stations, selectedStationId);
+function registerStationIcons(images) {
+    const scale = 2;
+    for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        if (!img) continue;
+        const id = `station-icon-${i}`;
+        if (map.hasImage(id)) continue;
+        try {
+            const w = img.naturalWidth || 54;
+            const h = img.naturalHeight || 53;
+            const canvas = document.createElement('canvas');
+            canvas.width = w * scale;
+            canvas.height = h * scale;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            map.addImage(id, data, { pixelRatio: scale });
+        } catch (err) {
+            console.error(`Failed to register station-icon-${i}:`, err);
+        }
+    }
+}
 
-    await loadStationIcons();
+// Add markers to the map with clustering. Assumes icons have already been
+// registered via registerStationIcons() — caller is responsible for ordering.
+function addMarkersToMap(stations) {
+    const geojson = stationsToGeoJSON(stations, selectedStationId);
 
     map.addSource('stations', {
         type: 'geojson',
@@ -173,6 +182,15 @@ async function addMarkersToMap(stations) {
         }
     });
 
+    // Pick the first icon that's actually registered as a fallback so a single
+    // missing icon (e.g. a flaky SVG download) doesn't blank out the whole
+    // unclustered-point layer.
+    let fallbackIconId = null;
+    for (let i = STATION_ICON_COUNT - 1; i >= 0; i--) {
+        const id = `station-icon-${i}`;
+        if (map.hasImage(id)) { fallbackIconId = id; break; }
+    }
+
     map.addLayer({
         id: 'unclustered-point',
         type: 'symbol',
@@ -182,14 +200,14 @@ async function addMarkersToMap(stations) {
             'icon-image': [
                 'match',
                 ['min', 6, ['to-number', ['coalesce', ['get', 'filled_slots'], 6]]],
-                0, 'station-icon-0',
-                1, 'station-icon-1',
-                2, 'station-icon-2',
-                3, 'station-icon-3',
-                4, 'station-icon-4',
-                5, 'station-icon-5',
-                6, 'station-icon-6',
-                'station-icon-6'
+                0, map.hasImage('station-icon-0') ? 'station-icon-0' : (fallbackIconId || 'station-icon-0'),
+                1, map.hasImage('station-icon-1') ? 'station-icon-1' : (fallbackIconId || 'station-icon-1'),
+                2, map.hasImage('station-icon-2') ? 'station-icon-2' : (fallbackIconId || 'station-icon-2'),
+                3, map.hasImage('station-icon-3') ? 'station-icon-3' : (fallbackIconId || 'station-icon-3'),
+                4, map.hasImage('station-icon-4') ? 'station-icon-4' : (fallbackIconId || 'station-icon-4'),
+                5, map.hasImage('station-icon-5') ? 'station-icon-5' : (fallbackIconId || 'station-icon-5'),
+                6, map.hasImage('station-icon-6') ? 'station-icon-6' : (fallbackIconId || 'station-icon-6'),
+                fallbackIconId || 'station-icon-6'
             ],
             'icon-size': [
                 'case',
@@ -274,6 +292,16 @@ function hideStationModal() {
 }
 
 async function startMapApp() {
+    // Kick off independent network work in parallel so first-load isn't a long
+    // serial chain (token -> map style -> stations -> icons -> render). The
+    // SVG icons + stations API don't depend on Mapbox, so we start them
+    // immediately. Without this, on first load the icons only begin
+    // downloading after the stations API responds, which is why stations
+    // would appear noticeably late (or "not at all" until refresh, when
+    // everything is cached).
+    const stationsDataPromise = fetchStationsData();
+    const iconImagesPromise = preloadStationIconImages();
+
     const res = await fetch('/api/mapbox-token');
     const data = await res.json();
     if (!data.token) {
@@ -322,9 +350,30 @@ async function startMapApp() {
         });
     }
 
-    map.on('load', () => {
-        fetchStations();
-    });
+    // Run setup once the map's style is ready. Use an idempotent runner so
+    // we don't miss the event if it has already fired (rare, but possible
+    // if the style was served from disk cache faster than this code path).
+    const onMapReady = async () => {
+        try {
+            const iconImages = await iconImagesPromise;
+            registerStationIcons(iconImages);
+            const stationsData = await stationsDataPromise;
+            stations = stationsData || [];
+            if (stations.length > 0) {
+                addMarkersToMap(stations);
+            } else {
+                console.warn('No stations to render.');
+            }
+            if (nearestFeature) nearestFeature.setStations(stations);
+        } catch (err) {
+            console.error('Error setting up station markers:', err);
+        }
+    };
+    if (map.loaded && map.loaded()) {
+        onMapReady();
+    } else {
+        map.once('load', onMapReady);
+    }
 }
 
 startMapApp();
