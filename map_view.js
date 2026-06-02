@@ -64,41 +64,34 @@ async function fetchStationsData() {
     return [];
 }
 
-// Two-step icon pipeline so SVG downloads can run in parallel with the map's
-// own style/tiles loading instead of serially after `map.on('load')`:
-//   1. preloadStationIconImages() downloads Icon0.svg ... Icon6.svg into <img>
-//      elements as soon as the page script runs. No map dependency.
-//   2. registerStationIcons(images) rasterizes each <img> at 2x and registers
-//      it via map.addImage(). Must run after the map's style is loaded.
-// A single failed icon no longer blocks the rest — we resolve to null for that
-// slot and fall back to whichever icon is available at render time.
+// Each Icon{N}.svg is loaded into an <img> and self-registers with the map
+// the moment it arrives. No batching, no timeouts, no decode dance, no
+// shared Promise — every icon is independent. If one fails, the others
+// still register, and the unclustered-circle fallback layer keeps that pin
+// visible at its coordinates regardless. Mapbox auto-rerenders the symbol
+// layer whenever a referenced image gets added via map.addImage(), so icons
+// "snap in" no matter when they finish — before, during, or after markers
+// are first drawn.
 const STATION_ICON_COUNT = 7; // Icon0.svg ... Icon6.svg
-let stationIconImagesPromise = null;
-function preloadStationIconImages() {
-    if (stationIconImagesPromise) return stationIconImagesPromise;
-    const loaders = [];
-    for (let i = 0; i < STATION_ICON_COUNT; i++) {
-        loaders.push(new Promise((resolve) => {
-            const img = new Image();
-            img.onload = () => resolve(img);
-            img.onerror = () => {
-                console.error(`Failed to load /Icon${i}.svg`);
-                resolve(null);
-            };
-            img.src = `/Icon${i}.svg`;
-        }));
-    }
-    stationIconImagesPromise = Promise.all(loaders);
-    return stationIconImagesPromise;
-}
 
-function registerStationIcons(images) {
+// Per-icon load state: prevents redundant requests when both the startup
+// preload AND the styleimagemissing handler ask for the same icon, while
+// still allowing a retry after a previous attempt failed.
+const stationIconLoadState = new Array(STATION_ICON_COUNT).fill('idle'); // 'idle' | 'loading' | 'loaded' | 'error'
+
+function loadStationIcon(index) {
+    if (!map) return;
+    if (index < 0 || index >= STATION_ICON_COUNT) return;
+    const id = `station-icon-${index}`;
+    if (map.hasImage(id)) { stationIconLoadState[index] = 'loaded'; return; }
+    const prevState = stationIconLoadState[index];
+    if (prevState === 'loading' || prevState === 'loaded') return;
+    stationIconLoadState[index] = 'loading';
+
     const scale = 2;
-    for (let i = 0; i < images.length; i++) {
-        const img = images[i];
-        if (!img) continue;
-        const id = `station-icon-${i}`;
-        if (map.hasImage(id)) continue;
+    const img = new Image();
+    img.onload = () => {
+        if (!map || map.hasImage(id)) { stationIconLoadState[index] = 'loaded'; return; }
         try {
             const w = img.naturalWidth || 54;
             const h = img.naturalHeight || 53;
@@ -109,116 +102,190 @@ function registerStationIcons(images) {
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
             map.addImage(id, data, { pixelRatio: scale });
+            stationIconLoadState[index] = 'loaded';
         } catch (err) {
-            console.error(`Failed to register station-icon-${i}:`, err);
+            console.error(`Failed to register ${id}:`, err);
+            stationIconLoadState[index] = 'error';
         }
-    }
+    };
+    img.onerror = () => {
+        console.error(`Failed to load /Icon${index}.svg`);
+        stationIconLoadState[index] = 'error';
+    };
+    // Cache-bust on retry so a CDN/browser-cached failed response doesn't
+    // re-serve the same broken bytes forever.
+    const cacheBust = prevState === 'error' ? `?r=${Date.now()}` : '';
+    img.src = `/Icon${index}.svg${cacheBust}`;
 }
 
-// Add markers to the map with clustering. Assumes icons have already been
-// registered via registerStationIcons() — caller is responsible for ordering.
+function loadAndRegisterStationIcons() {
+    for (let i = 0; i < STATION_ICON_COUNT; i++) loadStationIcon(i);
+}
+
+// Mapbox fires this when the symbol layer references an icon ID that hasn't
+// been added yet. Without a handler, the per-feature "missing" result can
+// stick — even after a later map.addImage(). Listening here makes icon
+// registration self-healing: any station rendered as just the fallback
+// circle (because its icon hasn't arrived yet, or failed first time) will
+// trigger a fresh load and snap into place when it lands.
+function attachStyleImageMissingHandler() {
+    map.on('styleimagemissing', (e) => {
+        const missingId = e && e.id;
+        if (typeof missingId !== 'string' || !missingId.startsWith('station-icon-')) return;
+        const index = parseInt(missingId.slice('station-icon-'.length), 10);
+        if (Number.isNaN(index)) return;
+        // Reset error state so a previously-failed icon gets retried on demand.
+        if (stationIconLoadState[index] === 'error') stationIconLoadState[index] = 'idle';
+        loadStationIcon(index);
+    });
+}
+
+// Track whether station click/hover handlers have been wired so a styledata
+// reload (which only re-creates source/layers) doesn't double-bind them.
+let stationInteractionsBound = false;
+
+// Render the stations source + layers. Idempotent — safe to call again after a
+// style reload that wipes them. Pin VISUALS do NOT depend on icon registration:
+// a fallback circle layer is drawn at every station coordinate, so as soon as
+// we know where a station is, it shows on the map. The SVG icon layer is drawn
+// on top of that and "lights up" automatically whenever map.addImage() finishes
+// registering the icons (Mapbox auto-rerenders missing images on registration).
 function addMarkersToMap(stations) {
     const geojson = stationsToGeoJSON(stations, selectedStationId);
 
-    map.addSource('stations', {
-        type: 'geojson',
-        data: geojson,
-        cluster: true,
-        clusterMaxZoom: 22,   // let clusterRadius govern at every zoom
-        clusterRadius: 25,    // only merge points within ~25px of each other
-        clusterProperties: {}
-    });
-
-    map.addLayer({
-        id: 'clusters',
-        type: 'circle',
-        source: 'stations',
-        filter: ['has', 'point_count'],
-        paint: {
-            'circle-color': [
-                'step',
-                ['get', 'point_count'],
-                '#0198FD',
-                10, '#0198FD',
-                30, '#0198FD'
-            ],
-            'circle-radius': [
-                'step',
-                ['get', 'point_count'],
-                15,  // radius for 1-2 points
-                3, 20,  // radius for 3+ points
-                5, 25   // radius for 5+ points
-            ],
-            'circle-stroke-width': 3,
-            'circle-stroke-color': '#ffffff',
-            'circle-stroke-opacity': 1,
-            // Snap instantly between cluster buckets instead of the default 300ms fade.
-            'circle-radius-transition': { duration: 0, delay: 0 },
-            'circle-color-transition': { duration: 0, delay: 0 }
-        }
-    });
-
-    map.addLayer({
-        id: 'cluster-count',
-        type: 'symbol',
-        source: 'stations',
-        filter: ['has', 'point_count'],
-        layout: {
-            'text-field': ['to-string', ['get', 'point_count']],
-            'text-size': [
-                'step',
-                ['get', 'point_count'],
-                14,
-                10, 16,
-                30, 18
-            ],
-            'text-allow-overlap': true,
-            'text-ignore-placement': true
-        },
-        paint: {
-            'text-color': '#ffffff',
-            'text-halo-color': '#ffffff',
-            'text-halo-width': 1
-        }
-    });
-
-    // Pick the first icon that's actually registered as a fallback so a single
-    // missing icon (e.g. a flaky SVG download) doesn't blank out the whole
-    // unclustered-point layer.
-    let fallbackIconId = null;
-    for (let i = STATION_ICON_COUNT - 1; i >= 0; i--) {
-        const id = `station-icon-${i}`;
-        if (map.hasImage(id)) { fallbackIconId = id; break; }
+    if (!map.getSource('stations')) {
+        map.addSource('stations', {
+            type: 'geojson',
+            data: geojson,
+            cluster: true,
+            clusterMaxZoom: 22,   // let clusterRadius govern at every zoom
+            clusterRadius: 25,    // only merge points within ~25px of each other
+            clusterProperties: {}
+        });
+    } else {
+        // Source already exists (e.g. styledata reload) — just push fresh data.
+        map.getSource('stations').setData(geojson);
     }
 
-    map.addLayer({
-        id: 'unclustered-point',
-        type: 'symbol',
-        source: 'stations',
-        filter: ['!', ['has', 'point_count']],
-        layout: {
-            'icon-image': [
-                'match',
-                ['min', 6, ['to-number', ['coalesce', ['get', 'filled_slots'], 6]]],
-                0, map.hasImage('station-icon-0') ? 'station-icon-0' : (fallbackIconId || 'station-icon-0'),
-                1, map.hasImage('station-icon-1') ? 'station-icon-1' : (fallbackIconId || 'station-icon-1'),
-                2, map.hasImage('station-icon-2') ? 'station-icon-2' : (fallbackIconId || 'station-icon-2'),
-                3, map.hasImage('station-icon-3') ? 'station-icon-3' : (fallbackIconId || 'station-icon-3'),
-                4, map.hasImage('station-icon-4') ? 'station-icon-4' : (fallbackIconId || 'station-icon-4'),
-                5, map.hasImage('station-icon-5') ? 'station-icon-5' : (fallbackIconId || 'station-icon-5'),
-                6, map.hasImage('station-icon-6') ? 'station-icon-6' : (fallbackIconId || 'station-icon-6'),
-                fallbackIconId || 'station-icon-6'
-            ],
-            'icon-size': [
-                'case',
-                ['get', 'selected'],
-                1.2,  // 20% larger when selected
-                1
-            ],
-            'icon-allow-overlap': true,
-            'icon-ignore-placement': true
-        }
-    });
+    if (!map.getLayer('clusters')) {
+        map.addLayer({
+            id: 'clusters',
+            type: 'circle',
+            source: 'stations',
+            filter: ['has', 'point_count'],
+            paint: {
+                'circle-color': [
+                    'step',
+                    ['get', 'point_count'],
+                    '#0198FD',
+                    10, '#0198FD',
+                    30, '#0198FD'
+                ],
+                'circle-radius': [
+                    'step',
+                    ['get', 'point_count'],
+                    15,  // radius for 1-2 points
+                    3, 20,  // radius for 3+ points
+                    5, 25   // radius for 5+ points
+                ],
+                'circle-stroke-width': 3,
+                'circle-stroke-color': '#ffffff',
+                'circle-stroke-opacity': 1,
+                // Snap instantly between cluster buckets instead of the default 300ms fade.
+                'circle-radius-transition': { duration: 0, delay: 0 },
+                'circle-color-transition': { duration: 0, delay: 0 }
+            }
+        });
+    }
+
+    if (!map.getLayer('cluster-count')) {
+        map.addLayer({
+            id: 'cluster-count',
+            type: 'symbol',
+            source: 'stations',
+            filter: ['has', 'point_count'],
+            layout: {
+                'text-field': ['to-string', ['get', 'point_count']],
+                'text-size': [
+                    'step',
+                    ['get', 'point_count'],
+                    14,
+                    10, 16,
+                    30, 18
+                ],
+                'text-allow-overlap': true,
+                'text-ignore-placement': true
+            },
+            paint: {
+                'text-color': '#ffffff',
+                'text-halo-color': '#ffffff',
+                'text-halo-width': 1
+            }
+        });
+    }
+
+    // Fallback circle for unclustered points. Always rendered, regardless of
+    // whether SVG icons have loaded — guarantees a station is visible the
+    // moment its coordinates are known. Sized to sit fully under the SVG icon
+    // (icons are 54x53 CSS px), so when icons load they cover this completely.
+    if (!map.getLayer('unclustered-circle')) {
+        map.addLayer({
+            id: 'unclustered-circle',
+            type: 'circle',
+            source: 'stations',
+            filter: ['!', ['has', 'point_count']],
+            paint: {
+                'circle-radius': [
+                    'case',
+                    ['get', 'selected'], 14,
+                    12
+                ],
+                'circle-color': '#ffffff',
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#0198FD',
+                'circle-stroke-opacity': 1
+            }
+        });
+    }
+
+    // Symbol layer with the SVG pins. The icon-image expression references
+    // station-icon-0..6 by ID without any hasImage() checks — Mapbox prints a
+    // warning for missing images but DOES re-render the symbol once the image
+    // is registered via map.addImage(). This is what lets icons "snap in" when
+    // they finish loading after the layer is already on screen.
+    if (!map.getLayer('unclustered-point')) {
+        map.addLayer({
+            id: 'unclustered-point',
+            type: 'symbol',
+            source: 'stations',
+            filter: ['!', ['has', 'point_count']],
+            layout: {
+                'icon-image': [
+                    'match',
+                    ['min', 6, ['to-number', ['coalesce', ['get', 'filled_slots'], 6]]],
+                    0, 'station-icon-0',
+                    1, 'station-icon-1',
+                    2, 'station-icon-2',
+                    3, 'station-icon-3',
+                    4, 'station-icon-4',
+                    5, 'station-icon-5',
+                    6, 'station-icon-6',
+                    'station-icon-6'
+                ],
+                'icon-size': [
+                    'case',
+                    ['get', 'selected'],
+                    1.2,  // 20% larger when selected
+                    1
+                ],
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true
+            }
+        });
+    }
+
+    if (stationInteractionsBound) return;
+    stationInteractionsBound = true;
 
     map.on('click', 'clusters', (e) => {
         const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
@@ -232,16 +299,20 @@ function addMarkersToMap(stations) {
         });
     });
 
-    map.on('click', 'unclustered-point', (e) => {
+    const onUnclusteredClick = (e) => {
         const properties = e.features[0].properties;
         const station = stations.find(s => s.id === properties.id);
         if (station) selectStation(station);
-    });
+    };
+    map.on('click', 'unclustered-point', onUnclusteredClick);
+    map.on('click', 'unclustered-circle', onUnclusteredClick);
 
     map.on('mouseenter', 'clusters', () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', 'clusters', () => { map.getCanvas().style.cursor = ''; });
     map.on('mouseenter', 'unclustered-point', () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', 'unclustered-point', () => { map.getCanvas().style.cursor = ''; });
+    map.on('mouseenter', 'unclustered-circle', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'unclustered-circle', () => { map.getCanvas().style.cursor = ''; });
 }
 
 function selectStation(station) {
@@ -292,15 +363,10 @@ function hideStationModal() {
 }
 
 async function startMapApp() {
-    // Kick off independent network work in parallel so first-load isn't a long
-    // serial chain (token -> map style -> stations -> icons -> render). The
-    // SVG icons + stations API don't depend on Mapbox, so we start them
-    // immediately. Without this, on first load the icons only begin
-    // downloading after the stations API responds, which is why stations
-    // would appear noticeably late (or "not at all" until refresh, when
-    // everything is cached).
+    // Fire the stations request the moment the script runs — completely
+    // independent of map creation, so it overlaps with the token fetch and
+    // Mapbox style load.
     const stationsDataPromise = fetchStationsData();
-    const iconImagesPromise = preloadStationIconImages();
 
     const res = await fetch('/api/mapbox-token');
     const data = await res.json();
@@ -336,6 +402,10 @@ async function startMapApp() {
         if (features.length === 0) hideStationModal();
     });
 
+    // Self-heal any icon Mapbox can't find at render time (race with stations
+    // data, or a single Icon{N}.svg that failed first time around).
+    attachStyleImageMissingHandler();
+
     // Attach the shared nearest-station feature (works on both /, /map, and /{sticker_id}).
     // ?embed=1 in the URL hides the built-in trigger button and disables the
     // auto-prompt so a parent page (e.g. Framer) can own the trigger via postMessage.
@@ -350,30 +420,37 @@ async function startMapApp() {
         });
     }
 
-    // Run setup once the map's style is ready. Use an idempotent runner so
-    // we don't miss the event if it has already fired (rare, but possible
-    // if the style was served from disk cache faster than this code path).
-    const onMapReady = async () => {
-        try {
-            const iconImages = await iconImagesPromise;
-            registerStationIcons(iconImages);
-            const stationsData = await stationsDataPromise;
-            stations = stationsData || [];
-            if (stations.length > 0) {
-                addMarkersToMap(stations);
-            } else {
-                console.warn('No stations to render.');
-            }
-            if (nearestFeature) nearestFeature.setStations(stations);
-        } catch (err) {
-            console.error('Error setting up station markers:', err);
-        }
-    };
-    if (map.loaded && map.loaded()) {
-        onMapReady();
+    // Wait until the style is ready before touching addSource/addLayer/addImage.
+    // isStyleLoaded() catches the case where 'load' already fired before we got here.
+    await new Promise((resolve) => {
+        if (map.isStyleLoaded && map.isStyleLoaded()) resolve();
+        else map.once('load', resolve);
+    });
+
+    // Kick off SVG icon loading. Each icon self-registers when it arrives —
+    // no gating on stations, no gating on each other. Markers are visible via
+    // the unclustered-circle fallback layer until icons snap in.
+    loadAndRegisterStationIcons();
+
+    // The whole point: the moment we have coordinates, pins go on the map.
+    // No Promise.all dance, no icon dependency, no questions asked.
+    stations = (await stationsDataPromise) || [];
+    if (stations.length > 0) {
+        addMarkersToMap(stations);
     } else {
-        map.once('load', onMapReady);
+        console.warn('No stations to render.');
     }
+    if (nearestFeature) nearestFeature.setStations(stations);
+
+    // If Mapbox reloads the style for any reason (setStyle, language change,
+    // etc.), our source/layers/images get wiped. Re-add them.
+    // addMarkersToMap and loadAndRegisterStationIcons are both idempotent.
+    map.on('styledata', () => {
+        if (stations.length > 0 && !map.getSource('stations')) {
+            addMarkersToMap(stations);
+        }
+        loadAndRegisterStationIcons();
+    });
 }
 
 startMapApp();
