@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
-# Rasterize the station SVG icons (Icon0.svg .. Icon6.svg at the repo root)
-# into PNG assets for the Expo mobile app at apps/mobile/assets/stations/.
+# Rasterize the station SVG icon (Icon6.svg at the repo root) into PNG
+# assets for the Expo mobile app at apps/mobile/assets/stations/.
 #
 # Why this exists:
-#   - The web app loads the SVGs directly via mapbox-gl-js' map.addImage()
+#   - The web app loads the SVG directly via mapbox-gl-js' map.addImage()
 #     (apps/web/src/features/map-view/loadStationIcons.ts).
 #   - The native Mapbox SDK used by @rnmapbox/maps does NOT render SVG; it
 #     only accepts raster bitmaps registered via <Mapbox.Images>. So the
 #     mobile app needs pre-rasterized PNGs at three densities (1x/2x/3x).
+#
+# We only rasterize Icon6.svg because the app uses a single station-icon
+# image for every pin (no per-slot variant). The other SVGs (Icon0..Icon5)
+# remain in the repo for now in case the per-slot UX is reintroduced.
 #
 # Why the SVG patch step:
 #   The CUUB icons fill their outer hexagonal "card" via a self-referencing
@@ -25,9 +29,9 @@
 #   bash scripts/rasterize-station-icons.sh
 #
 # Output:
-#   apps/mobile/assets/stations/icon{0..6}.png       (54x53)
-#   apps/mobile/assets/stations/icon{0..6}@2x.png    (108x106)
-#   apps/mobile/assets/stations/icon{0..6}@3x.png    (162x159)
+#   apps/mobile/assets/stations/icon6.png       (54x53)
+#   apps/mobile/assets/stations/icon6@2x.png    (108x106)
+#   apps/mobile/assets/stations/icon6@3x.png    (162x159)
 
 set -euo pipefail
 
@@ -49,9 +53,9 @@ mkdir -p "$OUT_DIR"
 BASE_W=54
 BASE_H=53
 
-echo "==> Rasterizing 7 icons at 1x/2x/3x into $OUT_DIR"
+echo "==> Rasterizing Icon6.svg at 1x/2x/3x into $OUT_DIR"
 
-for i in 0 1 2 3 4 5 6; do
+for i in 6; do
   src="$SVG_DIR/Icon${i}.svg"
   patched="$TMP_DIR/Icon${i}.svg"
 

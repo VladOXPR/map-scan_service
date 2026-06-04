@@ -5,10 +5,7 @@ import type mapboxgl from "mapbox-gl";
 import type { Station } from "@cuub/shared";
 import { cuubClient } from "@/lib/cuubClient";
 import { stationsToGeoJSON } from "./stationsToGeoJSON";
-import {
-  attachStyleImageMissingHandler,
-  loadStationIcons,
-} from "./loadStationIcons";
+import { STATION_ICON_NAME, loadStationIcons } from "./loadStationIcons";
 import { StationModal } from "./StationModal";
 import { SupportButton } from "./SupportButton";
 import { NearestStationFeature } from "@/features/nearest/NearestStationFeature";
@@ -61,9 +58,6 @@ export function MapView({
         pitch: 45,
         fadeDuration: 0,
       });
-      // Attach the missing-image backstop BEFORE anything renders, so a
-      // race between symbol-bucket build and icon registration can self-heal.
-      attachStyleImageMissingHandler(instance);
       mapRef.current = instance;
       setMapboxgl(mb);
       setMap(instance);
@@ -203,25 +197,7 @@ export function MapView({
         source: "stations",
         filter: ["!", ["has", "point_count"]],
         layout: {
-          "icon-image": [
-            "match",
-            ["min", 6, ["to-number", ["coalesce", ["get", "filled_slots"], 6]]],
-            0,
-            "station-icon-0",
-            1,
-            "station-icon-1",
-            2,
-            "station-icon-2",
-            3,
-            "station-icon-3",
-            4,
-            "station-icon-4",
-            5,
-            "station-icon-5",
-            6,
-            "station-icon-6",
-            "station-icon-6",
-          ],
+          "icon-image": STATION_ICON_NAME,
           "icon-size":
             variant === "full"
               ? (["case", ["get", "selected"], 1.2, 1] as unknown as number)

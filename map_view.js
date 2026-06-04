@@ -64,60 +64,43 @@ async function fetchStationsData() {
     return [];
 }
 
-// Mapbox bundles every symbol layer on the same source into one per-tile
-// "symbol bucket". If ANY referenced icon image is missing when the bucket
-// is built, that whole bucket can commit in a poisoned state — meaning
-// neither cluster-count text NOR unclustered-point icons render on that tile.
-// The fix: register a 1×1-equivalent transparent placeholder for every
-// station-icon-N ID the moment the style is ready, BEFORE addMarkersToMap()
-// adds the symbol layer. The bucket is now built against guaranteed-existing
-// images, so it always commits cleanly. Real SVGs swap in later via
-// map.updateImage() with no bucket disruption.
-const STATION_ICON_COUNT = 7; // Icon0.svg ... Icon6.svg
+// One station icon for everyone. The placeholder strategy is preserved
+// (and now trivially simple) because it's what keeps the symbol bucket
+// committable: Mapbox bundles every symbol layer on the same source into
+// one per-tile bucket, and a missing image at build time can poison the
+// whole bucket — taking cluster numbers down with the pins. Registering
+// a transparent placeholder synchronously up front guarantees the bucket
+// always builds against an existing image; the real SVG swaps in via
+// map.updateImage() without bucket disruption.
+const STATION_ICON_NAME = 'station-icon';
+const STATION_ICON_URL = '/Icon6.svg';
 const STATION_ICON_NATIVE_W = 54;
 const STATION_ICON_NATIVE_H = 53;
 const STATION_ICON_SCALE = 2;
+let stationIconLoaded = false;
 
-// Per-icon load state for the REAL SVG (placeholders are tracked separately
-// by map.hasImage). 'idle' means a load hasn't been attempted; 'loaded' means
-// the real SVG is in the map. styleimagemissing won't fire for our icons
-// anymore (placeholders prevent it), but we still drive loads off this state.
-const stationIconLoadState = new Array(STATION_ICON_COUNT).fill('idle'); // 'idle' | 'loading' | 'loaded' | 'error'
-
-// Build a fully transparent ImageData of the exact rasterized dimensions
-// the real icons will use (scale × native). Same dimensions = updateImage()
-// can swap them later without dimension-mismatch fallback paths.
 function buildTransparentPlaceholder() {
     const w = STATION_ICON_NATIVE_W * STATION_ICON_SCALE;
     const h = STATION_ICON_NATIVE_H * STATION_ICON_SCALE;
     return new ImageData(new Uint8ClampedArray(w * h * 4), w, h);
 }
 
-function registerPlaceholderStationIcons() {
-    if (!map) return;
-    const placeholder = buildTransparentPlaceholder();
-    for (let i = 0; i < STATION_ICON_COUNT; i++) {
-        const id = `station-icon-${i}`;
-        if (map.hasImage(id)) continue;
-        try {
-            map.addImage(id, placeholder, { pixelRatio: STATION_ICON_SCALE });
-        } catch (err) {
-            console.error(`Failed to register placeholder ${id}:`, err);
-        }
+function registerStationIconPlaceholder() {
+    if (!map || map.hasImage(STATION_ICON_NAME)) return;
+    try {
+        map.addImage(STATION_ICON_NAME, buildTransparentPlaceholder(), {
+            pixelRatio: STATION_ICON_SCALE
+        });
+    } catch (err) {
+        console.error(`Failed to register placeholder ${STATION_ICON_NAME}:`, err);
     }
 }
 
-function loadStationIcon(index) {
-    if (!map) return;
-    if (index < 0 || index >= STATION_ICON_COUNT) return;
-    const id = `station-icon-${index}`;
-    const prevState = stationIconLoadState[index];
-    if (prevState === 'loading' || prevState === 'loaded') return;
-    stationIconLoadState[index] = 'loading';
-
+function loadStationIcon() {
+    if (!map || stationIconLoaded) return;
     const img = new Image();
     img.onload = () => {
-        if (!map) { stationIconLoadState[index] = 'idle'; return; }
+        if (!map) return;
         try {
             const w = STATION_ICON_NATIVE_W * STATION_ICON_SCALE;
             const h = STATION_ICON_NATIVE_H * STATION_ICON_SCALE;
@@ -127,46 +110,15 @@ function loadStationIcon(index) {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, w, h);
             const data = ctx.getImageData(0, 0, w, h);
-            // Swap the placeholder (or earlier copy) for the real icon.
-            // updateImage() does not re-create the bucket, so the symbol
-            // layer keeps rendering uninterrupted while pixels change.
-            if (map.hasImage(id)) map.updateImage(id, data);
-            else map.addImage(id, data, { pixelRatio: STATION_ICON_SCALE });
-            stationIconLoadState[index] = 'loaded';
+            if (map.hasImage(STATION_ICON_NAME)) map.updateImage(STATION_ICON_NAME, data);
+            else map.addImage(STATION_ICON_NAME, data, { pixelRatio: STATION_ICON_SCALE });
+            stationIconLoaded = true;
         } catch (err) {
-            console.error(`Failed to register ${id}:`, err);
-            stationIconLoadState[index] = 'error';
+            console.error(`Failed to register ${STATION_ICON_NAME}:`, err);
         }
     };
-    img.onerror = () => {
-        console.error(`Failed to load /Icon${index}.svg`);
-        stationIconLoadState[index] = 'error';
-    };
-    // Cache-bust on retry so a CDN/browser-cached failed response doesn't
-    // re-serve the same broken bytes forever.
-    const cacheBust = prevState === 'error' ? `?r=${Date.now()}` : '';
-    img.src = `/Icon${index}.svg${cacheBust}`;
-}
-
-function loadAndRegisterStationIcons() {
-    for (let i = 0; i < STATION_ICON_COUNT; i++) loadStationIcon(i);
-}
-
-// Defensive backstop: if for any reason a placeholder didn't get registered
-// (e.g. addImage threw, style reload wiped it), Mapbox fires this so we can
-// recover instead of leaving the bucket in a missing-image state.
-function attachStyleImageMissingHandler() {
-    map.on('styleimagemissing', (e) => {
-        const missingId = e && e.id;
-        if (typeof missingId !== 'string' || !missingId.startsWith('station-icon-')) return;
-        const index = parseInt(missingId.slice('station-icon-'.length), 10);
-        if (Number.isNaN(index)) return;
-        // Drop in a placeholder immediately so the bucket has SOMETHING to
-        // build against, then kick off the real load.
-        registerPlaceholderStationIcons();
-        if (stationIconLoadState[index] === 'error') stationIconLoadState[index] = 'idle';
-        loadStationIcon(index);
-    });
+    img.onerror = () => console.error(`Failed to load ${STATION_ICON_URL}`);
+    img.src = STATION_ICON_URL;
 }
 
 // Track whether station click/hover handlers have been wired so a styledata
@@ -286,11 +238,9 @@ function addMarkersToMap(stations) {
         });
     }
 
-    // Symbol layer with the SVG pins. The icon-image expression references
-    // station-icon-0..6 by ID without any hasImage() checks — Mapbox prints a
-    // warning for missing images but DOES re-render the symbol once the image
-    // is registered via map.addImage(). This is what lets icons "snap in" when
-    // they finish loading after the layer is already on screen.
+    // Symbol layer with the SVG pins. Just a single icon ID — the
+    // placeholder is already registered, the real SVG swaps in via
+    // map.updateImage() once it loads.
     if (!map.getLayer('unclustered-point')) {
         map.addLayer({
             id: 'unclustered-point',
@@ -298,18 +248,7 @@ function addMarkersToMap(stations) {
             source: 'stations',
             filter: ['!', ['has', 'point_count']],
             layout: {
-                'icon-image': [
-                    'match',
-                    ['min', 6, ['to-number', ['coalesce', ['get', 'filled_slots'], 6]]],
-                    0, 'station-icon-0',
-                    1, 'station-icon-1',
-                    2, 'station-icon-2',
-                    3, 'station-icon-3',
-                    4, 'station-icon-4',
-                    5, 'station-icon-5',
-                    6, 'station-icon-6',
-                    'station-icon-6'
-                ],
+                'icon-image': STATION_ICON_NAME,
                 'icon-size': [
                     'case',
                     ['get', 'selected'],
@@ -440,10 +379,6 @@ async function startMapApp() {
         if (features.length === 0) hideStationModal();
     });
 
-    // Self-heal any icon Mapbox can't find at render time (race with stations
-    // data, or a single Icon{N}.svg that failed first time around).
-    attachStyleImageMissingHandler();
-
     // Attach the shared nearest-station feature (works on both /, /map, and /{sticker_id}).
     // ?embed=1 in the URL hides the built-in trigger button and disables the
     // auto-prompt so a parent page (e.g. Framer) can own the trigger via postMessage.
@@ -465,17 +400,18 @@ async function startMapApp() {
         else map.once('load', resolve);
     });
 
-    // CRITICAL ORDER: register transparent placeholders for station-icon-0..6
-    // BEFORE addMarkersToMap adds the unclustered-point symbol layer. This
-    // guarantees the symbol bucket is built against existing images, which
-    // is what previously caused the bucket (and its sibling cluster-count
-    // text layer) to fail to commit on tiles where icons hadn't downloaded
-    // yet — manifesting as the entire station network disappearing.
-    registerPlaceholderStationIcons();
+    // CRITICAL ORDER: register the transparent placeholder for the station
+    // icon BEFORE addMarkersToMap adds the unclustered-point symbol layer.
+    // This guarantees the symbol bucket is built against an existing image,
+    // which is what previously caused the bucket (and its sibling
+    // cluster-count text layer) to fail to commit on tiles where the icon
+    // hadn't downloaded yet — manifesting as the entire station network
+    // disappearing.
+    registerStationIconPlaceholder();
 
-    // Now kick off the real SVG loads. They'll swap into the placeholders
-    // via map.updateImage() as each finishes.
-    loadAndRegisterStationIcons();
+    // Kick off the real SVG load. It'll swap into the placeholder via
+    // map.updateImage() when it finishes.
+    loadStationIcon();
 
     // The whole point: the moment we have coordinates, pins go on the map.
     // No Promise.all dance, no icon dependency, no questions asked.
@@ -488,22 +424,18 @@ async function startMapApp() {
     if (nearestFeature) nearestFeature.setStations(stations);
 
     // If Mapbox reloads the style for any reason (setStyle, language change,
-    // etc.), our source/layers/images get wiped. Re-add them — placeholders
-    // FIRST so the symbol bucket is never built against missing images, then
-    // the source/layers, then real icons re-register on top of placeholders.
-    // All helpers are idempotent.
+    // etc.), our source/layers/images get wiped. Re-add them — placeholder
+    // FIRST so the symbol bucket is never built against a missing image,
+    // then the source/layers, then the real icon. All helpers are idempotent.
     map.on('styledata', () => {
-        // Detect wiped icons BEFORE we re-add placeholders — anything missing
-        // here means the style replacement nuked it, so we need to reload the
-        // real SVG even if we previously marked it 'loaded'.
-        for (let i = 0; i < STATION_ICON_COUNT; i++) {
-            if (!map.hasImage(`station-icon-${i}`)) stationIconLoadState[i] = 'idle';
-        }
-        registerPlaceholderStationIcons();
+        // If the icon got wiped by a style replacement, reset the load flag
+        // so the upcoming load actually runs instead of short-circuiting.
+        if (!map.hasImage(STATION_ICON_NAME)) stationIconLoaded = false;
+        registerStationIconPlaceholder();
         if (stations.length > 0 && !map.getSource('stations')) {
             addMarkersToMap(stations);
         }
-        loadAndRegisterStationIcons();
+        loadStationIcon();
     });
 }
 
