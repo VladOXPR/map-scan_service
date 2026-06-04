@@ -5,7 +5,10 @@ import type mapboxgl from "mapbox-gl";
 import type { Station } from "@cuub/shared";
 import { cuubClient } from "@/lib/cuubClient";
 import { stationsToGeoJSON } from "./stationsToGeoJSON";
-import { loadStationIcons } from "./loadStationIcons";
+import {
+  attachStyleImageMissingHandler,
+  loadStationIcons,
+} from "./loadStationIcons";
 import { StationModal } from "./StationModal";
 import { SupportButton } from "./SupportButton";
 import { NearestStationFeature } from "@/features/nearest/NearestStationFeature";
@@ -58,6 +61,9 @@ export function MapView({
         pitch: 45,
         fadeDuration: 0,
       });
+      // Attach the missing-image backstop BEFORE anything renders, so a
+      // race between symbol-bucket build and icon registration can self-heal.
+      attachStyleImageMissingHandler(instance);
       mapRef.current = instance;
       setMapboxgl(mb);
       setMap(instance);
@@ -154,6 +160,13 @@ export function MapView({
         filter: ["has", "point_count"],
         layout: {
           "text-field": ["to-string", ["get", "point_count"]],
+          // Explicit font stack. Without this Mapbox uses the implicit
+          // default ("Open Sans Regular"), whose glyph PBF we've observed
+          // fail to be requested intermittently — when that happens the
+          // entire symbol bucket on this source fails to commit, taking
+          // both cluster numbers AND unclustered-point icons down with it.
+          // Two-font stack gives Mapbox a fallback if the first ever fails.
+          "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"],
           "text-size": ["step", ["get", "point_count"], 14, 10, 16, 30, 18],
           "text-allow-overlap": true,
           "text-ignore-placement": true,
@@ -162,6 +175,25 @@ export function MapView({
           "text-color": "#ffffff",
           "text-halo-color": "#ffffff",
           "text-halo-width": 1,
+        },
+      });
+
+      // Fallback circle for unclustered points. Always rendered, sits in a
+      // separate (circle) bucket from the symbol bucket — guaranteeing a
+      // visible pin per station coordinate even if symbol rendering fails.
+      // The SVG icon layer below sits on top and covers this once icons
+      // are registered.
+      map.addLayer({
+        id: "unclustered-circle",
+        type: "circle",
+        source: "stations",
+        filter: ["!", ["has", "point_count"]],
+        paint: {
+          "circle-radius": ["case", ["get", "selected"], 14, 12],
+          "circle-color": "#ffffff",
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#0198FD",
+          "circle-stroke-opacity": 1,
         },
       });
 
@@ -227,7 +259,7 @@ export function MapView({
       const onBackgroundClick = (e: mapboxgl.MapMouseEvent) => {
         if (variant !== "full") return;
         const features = map.queryRenderedFeatures(e.point, {
-          layers: ["clusters", "unclustered-point"],
+          layers: ["clusters", "unclustered-point", "unclustered-circle"],
         });
         if (features.length === 0) setSelectedStation(null);
       };
@@ -237,11 +269,14 @@ export function MapView({
 
       map.on("click", "clusters", onClusterClick);
       map.on("click", "unclustered-point", onPointClick);
+      map.on("click", "unclustered-circle", onPointClick);
       map.on("click", onBackgroundClick);
       map.on("mouseenter", "clusters", cursorOn);
       map.on("mouseleave", "clusters", cursorOff);
       map.on("mouseenter", "unclustered-point", cursorOn);
       map.on("mouseleave", "unclustered-point", cursorOff);
+      map.on("mouseenter", "unclustered-circle", cursorOn);
+      map.on("mouseleave", "unclustered-circle", cursorOff);
     };
 
     if (map.isStyleLoaded()) setupLayers();
