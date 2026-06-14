@@ -16,19 +16,24 @@ export interface MapViewProps {
   variant?: "full" | "blank";
   stickerId?: string | null;
   embedMode?: boolean;
+  // Stations seeded by the parent Server Component. When present, pins
+  // render the moment React hydrates — no client-side round-trip needed
+  // for first paint.
+  initialStations?: Station[];
 }
 
 export function MapView({
   variant = "full",
   stickerId = null,
   embedMode = false,
+  initialStations = [],
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const [map, setMap] = useState<mapboxgl.Map | null>(null);
   const [mapboxgl, setMapboxgl] = useState<MapboxModule | null>(null);
 
-  const [stations, setStations] = useState<Station[]>([]);
+  const [stations, setStations] = useState<Station[]>(initialStations);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [modalHeight, setModalHeight] = useState<number>(0);
 
@@ -71,22 +76,21 @@ export function MapView({
     };
   }, []);
 
+  // Stations refresh — fires at mount, in parallel with the map setup. With
+  // the route-level cache, this is a sub-5ms hit in the common case, so even
+  // when initialStations is already seeded by SSR the freshness refresh is
+  // essentially free.
   useEffect(() => {
-    if (!map) return;
     let cancelled = false;
     (async () => {
       const result = await cuubClient.getStations();
       if (cancelled) return;
-      if (result.success && result.data) {
-        setStations(result.data);
-      } else {
-        console.error("Failed to fetch stations:", result);
-      }
+      if (result.success && result.data) setStations(result.data);
     })();
     return () => {
       cancelled = true;
     };
-  }, [map]);
+  }, []);
 
   const selectedId = selectedStation?.id ?? null;
 

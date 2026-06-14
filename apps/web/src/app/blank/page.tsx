@@ -1,19 +1,17 @@
-"use client";
-
-import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
 import { MapView } from "@/features/map-view/MapView";
+import { getInitialStations } from "@/lib/getInitialStations";
 
-function BlankInner() {
-  const search = useSearchParams();
-  const embedMode = search?.get("embed") === "1";
-  return <MapView variant="blank" embedMode={embedMode} />;
-}
-
-export default function BlankPage() {
+export default async function BlankPage({
+  searchParams,
+}: {
+  searchParams: { embed?: string };
+}) {
+  const initialStations = await getInitialStations();
   return (
-    <Suspense fallback={null}>
-      <BlankInner />
-    </Suspense>
+    <MapView
+      variant="blank"
+      embedMode={searchParams.embed === "1"}
+      initialStations={initialStations}
+    />
   );
 }
