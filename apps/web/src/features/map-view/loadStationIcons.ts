@@ -1,56 +1,40 @@
 import type mapboxgl from "mapbox-gl";
 
-// One station icon for everyone. Eliminates the multi-variant match
-// expression, the per-variant state machine, and 6 of 7 SVG downloads.
+// 7 station icons, one per filled-slot count (0–6). Same placeholder-then-
+// updateImage pattern as the single-icon version, just looped:
 //
-// The placeholder strategy is preserved (and now trivially simple) because
-// it's what keeps the symbol bucket committable: Mapbox bundles every
-// symbol layer on the same source into one per-tile bucket. If the bucket
-// references an image that hasn't been registered yet, the entire bucket
-// can fail to commit on that tile — taking cluster numbers down with the
-// pins. By registering a transparent placeholder synchronously up front,
-// the bucket always builds against an existing image, and the real SVG
-// swaps in via map.updateImage() with no bucket disruption.
+//   1. Synchronously register a transparent placeholder for every variant
+//      so the symbol bucket can always commit. (Mapbox bundles every symbol
+//      layer on a source into one per-tile bucket; if any referenced image
+//      is missing at build time the entire bucket can fail to commit —
+//      taking cluster numbers down with the pins.)
+//   2. Kick off 7 SVG downloads in parallel. Each one swaps into its
+//      placeholder via map.updateImage() — no bucket disruption, no
+//      all-or-nothing failure mode. A flaky network on Icon3 leaves the
+//      other 6 variants fully functional.
+//   3. De-dupe per map via a WeakMap so re-mounts don't re-download.
 
-const STATION_ICON_ID = "station-icon";
-const STATION_ICON_URL = "/Icon6.svg";
-const STATION_ICON_NATIVE_W = 54;
-const STATION_ICON_NATIVE_H = 53;
-const STATION_ICON_SCALE = 2;
+const STATION_ICON_COUNT = 7;
+const NATIVE_W = 54;
+const NATIVE_H = 53;
+const SCALE = 2;
 
 const inFlight = new WeakMap<mapboxgl.Map, Promise<void>>();
 
 function placeholder(): ImageData {
-  const w = STATION_ICON_NATIVE_W * STATION_ICON_SCALE;
-  const h = STATION_ICON_NATIVE_H * STATION_ICON_SCALE;
+  const w = NATIVE_W * SCALE;
+  const h = NATIVE_H * SCALE;
   return new ImageData(new Uint8ClampedArray(w * h * 4), w, h);
 }
 
-export const STATION_ICON_NAME = STATION_ICON_ID;
-
-export function loadStationIcons(map: mapboxgl.Map): Promise<void> {
-  // Register the placeholder synchronously so any layer added immediately
-  // after this call already has a valid image to reference.
-  if (!map.hasImage(STATION_ICON_ID)) {
-    try {
-      map.addImage(STATION_ICON_ID, placeholder(), {
-        pixelRatio: STATION_ICON_SCALE,
-      });
-    } catch (err) {
-      console.error(`Failed to register placeholder ${STATION_ICON_ID}:`, err);
-    }
-  }
-
-  // De-dupe concurrent calls; the real SVG only needs to load once per map.
-  const existing = inFlight.get(map);
-  if (existing) return existing;
-
-  const promise = new Promise<void>((resolve) => {
+function loadOne(map: mapboxgl.Map, index: number): Promise<void> {
+  return new Promise((resolve) => {
+    const id = `station-icon-${index}`;
     const img = new Image();
     img.onload = () => {
       try {
-        const w = STATION_ICON_NATIVE_W * STATION_ICON_SCALE;
-        const h = STATION_ICON_NATIVE_H * STATION_ICON_SCALE;
+        const w = NATIVE_W * SCALE;
+        const h = NATIVE_H * SCALE;
         const canvas = document.createElement("canvas");
         canvas.width = w;
         canvas.height = h;
@@ -63,22 +47,39 @@ export function loadStationIcons(map: mapboxgl.Map): Promise<void> {
         const data = ctx.getImageData(0, 0, w, h);
         // updateImage() leaves the symbol bucket intact — pixels swap in
         // without re-tessellating any tiles.
-        if (map.hasImage(STATION_ICON_ID)) map.updateImage(STATION_ICON_ID, data);
-        else
-          map.addImage(STATION_ICON_ID, data, {
-            pixelRatio: STATION_ICON_SCALE,
-          });
+        if (map.hasImage(id)) map.updateImage(id, data);
+        else map.addImage(id, data, { pixelRatio: SCALE });
       } catch (err) {
-        console.error(`Failed to register ${STATION_ICON_ID}:`, err);
+        console.error(`Failed to register ${id}:`, err);
       }
       resolve();
     };
     img.onerror = () => {
-      console.error(`Failed to load ${STATION_ICON_URL}`);
+      console.error(`Failed to load /Icon${index}.svg`);
       resolve();
     };
-    img.src = STATION_ICON_URL;
+    img.src = `/Icon${index}.svg`;
   });
+}
+
+export function loadStationIcons(map: mapboxgl.Map): Promise<void> {
+  const ph = placeholder();
+  for (let i = 0; i < STATION_ICON_COUNT; i++) {
+    const id = `station-icon-${i}`;
+    if (map.hasImage(id)) continue;
+    try {
+      map.addImage(id, ph, { pixelRatio: SCALE });
+    } catch (err) {
+      console.error(`Failed to register placeholder ${id}:`, err);
+    }
+  }
+
+  const existing = inFlight.get(map);
+  if (existing) return existing;
+
+  const promise = Promise.all(
+    Array.from({ length: STATION_ICON_COUNT }, (_, i) => loadOne(map, i))
+  ).then(() => undefined);
 
   inFlight.set(map, promise);
   return promise;

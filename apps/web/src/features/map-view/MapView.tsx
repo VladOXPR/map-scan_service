@@ -5,7 +5,7 @@ import type mapboxgl from "mapbox-gl";
 import type { Station } from "@cuub/shared";
 import { cuubClient } from "@/lib/cuubClient";
 import { stationsToGeoJSON } from "./stationsToGeoJSON";
-import { STATION_ICON_NAME, loadStationIcons } from "./loadStationIcons";
+import { loadStationIcons } from "./loadStationIcons";
 import { StationModal } from "./StationModal";
 import { SupportButton } from "./SupportButton";
 import { NearestStationFeature } from "@/features/nearest/NearestStationFeature";
@@ -201,7 +201,24 @@ export function MapView({
         source: "stations",
         filter: ["!", ["has", "point_count"]],
         layout: {
-          "icon-image": STATION_ICON_NAME,
+          // Pick station-icon-{0..6} based on filled_slots. Coalesce missing
+          // values to 6 (the most common state when slot data is absent),
+          // clamp into [0..6], and route the trailing default through
+          // station-icon-6 too. Every branch maps to a placeholder that's
+          // already registered by loadStationIcons(), so the bucket never
+          // sees a missing image.
+          "icon-image": [
+            "match",
+            ["min", 6, ["to-number", ["coalesce", ["get", "filled_slots"], 6]]],
+            0, "station-icon-0",
+            1, "station-icon-1",
+            2, "station-icon-2",
+            3, "station-icon-3",
+            4, "station-icon-4",
+            5, "station-icon-5",
+            6, "station-icon-6",
+            "station-icon-6",
+          ] as unknown as string,
           "icon-size":
             variant === "full"
               ? (["case", ["get", "selected"], 1.2, 1] as unknown as number)

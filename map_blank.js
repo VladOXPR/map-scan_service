@@ -56,13 +56,13 @@ async function fetchStations() {
     }
 }
 
-// Single station icon. Register a transparent placeholder synchronously so
-// the symbol bucket always builds against an existing image (avoids the
-// per-tile bucket-poisoning bug where missing images take cluster numbers
-// down with the pins). Real SVG swaps in via map.updateImage() when it
-// finishes downloading.
-const STATION_ICON_NAME = 'station-icon';
-const STATION_ICON_URL = '/Icon6.svg';
+// 7 station icons, one per filled-slot count (0–6). Register transparent
+// placeholders synchronously so the symbol bucket always builds against
+// existing images (avoids the per-tile bucket-poisoning bug where missing
+// images take cluster numbers down with the pins). Real SVGs swap in via
+// map.updateImage() as each download finishes — per-icon failures stay
+// isolated.
+const STATION_ICON_COUNT = 7;
 const STATION_ICON_NATIVE_W = 54;
 const STATION_ICON_NATIVE_H = 53;
 const STATION_ICON_SCALE = 2;
@@ -74,18 +74,10 @@ function buildTransparentPlaceholder() {
     return new ImageData(new Uint8ClampedArray(w * h * 4), w, h);
 }
 
-function loadStationIcons() {
-    if (!map.hasImage(STATION_ICON_NAME)) {
-        try {
-            map.addImage(STATION_ICON_NAME, buildTransparentPlaceholder(), {
-                pixelRatio: STATION_ICON_SCALE
-            });
-        } catch (err) {
-            console.error(`Failed to register placeholder ${STATION_ICON_NAME}:`, err);
-        }
-    }
-    if (stationIconsPromise) return stationIconsPromise;
-    stationIconsPromise = new Promise((resolve) => {
+function loadStationIconAt(index) {
+    return new Promise((resolve) => {
+        const id = `station-icon-${index}`;
+        const url = `/Icon${index}.svg`;
         const img = new Image();
         img.onload = () => {
             try {
@@ -97,19 +89,36 @@ function loadStationIcons() {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, w, h);
                 const data = ctx.getImageData(0, 0, w, h);
-                if (map.hasImage(STATION_ICON_NAME)) map.updateImage(STATION_ICON_NAME, data);
-                else map.addImage(STATION_ICON_NAME, data, { pixelRatio: STATION_ICON_SCALE });
+                if (map.hasImage(id)) map.updateImage(id, data);
+                else map.addImage(id, data, { pixelRatio: STATION_ICON_SCALE });
             } catch (err) {
-                console.error(`Failed to register ${STATION_ICON_NAME}:`, err);
+                console.error(`Failed to register ${id}:`, err);
             }
             resolve();
         };
         img.onerror = () => {
-            console.error(`Failed to load ${STATION_ICON_URL}`);
+            console.error(`Failed to load ${url}`);
             resolve();
         };
-        img.src = STATION_ICON_URL;
+        img.src = url;
     });
+}
+
+function loadStationIcons() {
+    const placeholder = buildTransparentPlaceholder();
+    for (let i = 0; i < STATION_ICON_COUNT; i++) {
+        const id = `station-icon-${i}`;
+        if (map.hasImage(id)) continue;
+        try {
+            map.addImage(id, placeholder, { pixelRatio: STATION_ICON_SCALE });
+        } catch (err) {
+            console.error(`Failed to register placeholder ${id}:`, err);
+        }
+    }
+    if (stationIconsPromise) return stationIconsPromise;
+    const loads = [];
+    for (let i = 0; i < STATION_ICON_COUNT; i++) loads.push(loadStationIconAt(i));
+    stationIconsPromise = Promise.all(loads).then(() => undefined);
     return stationIconsPromise;
 }
 
@@ -190,7 +199,18 @@ async function addMarkersToMap(stationList) {
         source: 'stations',
         filter: ['!', ['has', 'point_count']],
         layout: {
-            'icon-image': STATION_ICON_NAME,
+            'icon-image': [
+                'match',
+                ['min', 6, ['to-number', ['coalesce', ['get', 'filled_slots'], 6]]],
+                0, 'station-icon-0',
+                1, 'station-icon-1',
+                2, 'station-icon-2',
+                3, 'station-icon-3',
+                4, 'station-icon-4',
+                5, 'station-icon-5',
+                6, 'station-icon-6',
+                'station-icon-6'
+            ],
             'icon-size': 1,
             'icon-allow-overlap': true,
             'icon-ignore-placement': true

@@ -9,9 +9,18 @@ import { StationModal } from "./StationModal";
 import { SupportButton } from "./SupportButton";
 import { NearestStationFeature } from "@/features/nearest/NearestStationFeature";
 
-// Single station icon for everyone — no per-slot variant.
+// One bitmap per filled-slot count (0–6). Native Mapbox doesn't render
+// SVG, so these are pre-rasterized PNGs at 1x/2x/3x by
+// scripts/rasterize-station-icons.sh; React Native's asset density picker
+// chooses the right file at runtime.
 const STATION_ICONS = {
-  "station-icon": require("../../../assets/stations/icon6.png"),
+  "station-icon-0": require("../../../assets/stations/icon0.png"),
+  "station-icon-1": require("../../../assets/stations/icon1.png"),
+  "station-icon-2": require("../../../assets/stations/icon2.png"),
+  "station-icon-3": require("../../../assets/stations/icon3.png"),
+  "station-icon-4": require("../../../assets/stations/icon4.png"),
+  "station-icon-5": require("../../../assets/stations/icon5.png"),
+  "station-icon-6": require("../../../assets/stations/icon6.png"),
 };
 
 if (MAPBOX_ACCESS_TOKEN) {
@@ -120,7 +129,21 @@ export function MapScreen({
             id="unclustered-point"
             filter={["!", ["has", "point_count"]]}
             style={{
-              iconImage: "station-icon",
+              // Pick station-icon-{0..6} from filled_slots. Same expression
+              // as the web map (apps/web/src/features/map-view/MapView.tsx)
+              // so the two clients stay visually in sync.
+              iconImage: [
+                "match",
+                ["min", 6, ["to-number", ["coalesce", ["get", "filled_slots"], 6]]],
+                0, "station-icon-0",
+                1, "station-icon-1",
+                2, "station-icon-2",
+                3, "station-icon-3",
+                4, "station-icon-4",
+                5, "station-icon-5",
+                6, "station-icon-6",
+                "station-icon-6",
+              ] as unknown as string,
               iconSize:
                 variant === "full"
                   ? (["case", ["get", "selected"], 1.2, 1] as unknown as number)
