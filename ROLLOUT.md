@@ -55,6 +55,9 @@ The repo `Dockerfile` is now a multi-stage Next.js build. Deploy with the same `
 - `MAPBOX_ACCESS_TOKEN` (server-only)
 - `CUUB_API_BASE` (defaults to `https://api.cuub.tech`)
 - `CUUB_SUPPORT_PHONE` (defaults to `+14642377449`)
+- `CUUB_API_MIRROR_ENABLED=true` — mirror scan POSTs to cuub-api (optional but required for dashboard Batteries visits)
+- `CUUB_API_URL` — deployed cuub-api URL (e.g. `https://cuub-api-406495793630.us-central1.run.app`)
+- `CUUB_API_TOKEN` — same as cuub-api `MACHINE_API_TOKEN`
 
 ### Mobile (EAS / native)
 
@@ -66,7 +69,7 @@ The repo `Dockerfile` is now a multi-stage Next.js build. Deploy with the same `
 ## 5. Cutover steps
 
 1. Deploy `apps/web` to a staging URL, run `WEB_URL=https://staging.cuub.tech bash scripts/smoke-api-parity.sh` and the manual web checklist above.
-2. Repoint the existing Cloud Run service (`map-service`) at the new image. The Express service can stay deployed under a different tag for rollback.
+2. Repoint the existing Cloud Run service (`map-scan-service`) at the new image. The Express service can stay deployed under a different tag for rollback.
 3. Submit mobile internal-testing builds (TestFlight + Internal App Sharing) and run the mobile checklist on at least one iOS device and one Android device.
 4. Once mobile beta is signed off, promote both web and mobile to production. The legacy Express server can then be decommissioned (`server.js`, `map_view.html`, `map_blank.html`, `map_view.js`, `map_blank.js`, `scan_service.js`, `lib/geo.js`, `lib/nearest_feature.js` at the repo root are kept for reference and may be deleted after a stability window).
 
