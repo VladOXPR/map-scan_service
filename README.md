@@ -29,9 +29,9 @@ npm run mobile:start
 ```
                 +---------------------+
                 |   Next.js (apps/web)|
-   Mobile <-->  |  /api/* proxy routes| <----> api.cuub.tech
-                +---------------------+
-                          ^
+   Mobile <-->  |  /api/* proxy routes| <----> api.cuub.tech (primary)
+                +---------------------+              |
+                          ^                          +----> cuub-api (mirror, optional)
                           |
                   packages/shared
                   (CuubClient, geo, types)
@@ -40,6 +40,7 @@ npm run mobile:start
 - `MAPBOX_ACCESS_TOKEN` lives only on the Next.js server and is fetched by clients via `/api/mapbox-token`.
 - The mobile app reads `EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN` from its own env so it can initialize the native Mapbox SDK without a token round-trip.
 - All CUUB battery/station calls go through Next API routes for both clients.
+- When enabled, each scan POST also fire-and-forgets `POST {CUUB_API_URL}/battery/:id` so cuub-dashboard Batteries (`GET /visits`) sees physical QR scans.
 
 ## Routes
 
@@ -58,6 +59,31 @@ Mobile (`apps/mobile`):
 
 - Mobile station markers currently use color-coded circle layers as a clean stand-in for the SVG icons used on web. Drop PNG-rasterized versions of `Icon0..Icon6` into `apps/mobile/assets/` and switch `MapScreen.tsx` back to `SymbolLayer` + `Mapbox.Images` if pixel-perfect parity is required.
 - The legacy Express server is still runnable via `npm run legacy:start` until the Next deployment fully replaces it.
+
+## Environment Variables (scan mirror)
+
+While legacy `api.cuub.tech` stays the primary scan backend, you can mirror each scan POST to cuub-api:
+
+| Variable | Example | Purpose |
+|---|---|---|
+| `CUUB_API_MIRROR_ENABLED` | `true` | Enable secondary POST to cuub-api |
+| `CUUB_API_URL` | `http://localhost:3001` | cuub-api base URL, no trailing slash |
+| `CUUB_API_TOKEN` | same as cuub-api `MACHINE_API_TOKEN` | Bearer token for `POST /battery/:sticker_id` |
+
+Set these in `apps/web/.env.local` for local Next.js, or on Cloud Run for production. Mirror failures never block the rental flow.
+
+**Cloud Run** (env is already configured on `map-scan-service`; redeploy code after changing the Next route):
+
+```bash
+gcloud run services update map-scan-service \
+  --project keyextract-482721 \
+  --region us-central1 \
+  --update-env-vars CUUB_API_MIRROR_ENABLED=true,CUUB_API_URL=https://YOUR-CUUB-API-URL,CUUB_API_TOKEN=YOUR_MACHINE_API_TOKEN
+```
+
+After deploy, scan a registered battery QR and check Cloud Run logs for `[cuub-api mirror] scan recorded for {sticker_id}`. Then verify `GET /visits` on cuub-api shows the new row.
+
+**Troubleshooting:** if the map modal appears but the dashboard Batteries page stays empty, the mirror is usually disabled, the Next route lacks mirror code, or `CUUB_API_URL` is unreachable from Cloud Run (never use `localhost:3001` in production).
 
 ## Deployment
 

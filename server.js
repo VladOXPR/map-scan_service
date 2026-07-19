@@ -1,8 +1,81 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const http = require('http');
 const https = require('https');
 const app = express();
+
+function isCuubApiMirrorEnabled() {
+    const flag = process.env.CUUB_API_MIRROR_ENABLED;
+    return flag === 'true' || flag === '1';
+}
+
+function mirrorScanToCuubApi(stickerId, manufactureId) {
+    if (!isCuubApiMirrorEnabled()) {
+        return;
+    }
+
+    const baseUrl = process.env.CUUB_API_URL?.trim();
+    const token = process.env.CUUB_API_TOKEN?.trim();
+    if (!baseUrl || !token) {
+        console.warn('[cuub-api mirror] CUUB_API_MIRROR_ENABLED but CUUB_API_URL or CUUB_API_TOKEN is missing');
+        return;
+    }
+
+    let parsed;
+    try {
+        parsed = new URL(baseUrl);
+    } catch (error) {
+        console.error('[cuub-api mirror] Invalid CUUB_API_URL:', baseUrl, error.message);
+        return;
+    }
+
+    const postData = JSON.stringify({});
+    const isHttps = parsed.protocol === 'https:';
+    const client = isHttps ? https : http;
+    const port = parsed.port || (isHttps ? 443 : 80);
+    const requestPath = `/battery/${encodeURIComponent(stickerId)}`;
+
+    const options = {
+        hostname: parsed.hostname,
+        port,
+        path: requestPath,
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData),
+            Authorization: `Bearer ${token}`,
+            ...(manufactureId ? { manufacture_id: manufactureId } : {}),
+        },
+    };
+
+    const mirrorRequest = client.request(options, (mirrorResponse) => {
+        let data = '';
+
+        mirrorResponse.on('data', (chunk) => {
+            data += chunk;
+        });
+
+        mirrorResponse.on('end', () => {
+            if (mirrorResponse.statusCode === 201) {
+                console.log(`[cuub-api mirror] scan recorded for ${stickerId}`);
+                return;
+            }
+
+            console.warn(
+                `[cuub-api mirror] ${stickerId} -> HTTP ${mirrorResponse.statusCode}:`,
+                data.slice(0, 300),
+            );
+        });
+    });
+
+    mirrorRequest.on('error', (error) => {
+        console.warn(`[cuub-api mirror] ${stickerId} network error:`, error.message);
+    });
+
+    mirrorRequest.write(postData);
+    mirrorRequest.end();
+}
 
 // Allow embedding in iframes (e.g. Framer at framer.com, map.cuub.tech)
 app.use((req, res, next) => {
@@ -115,6 +188,8 @@ app.post('/api/battery/:sticker_id', express.json(), (req, res) => {
     const stickerType = req.headers['sticker_type'] || 'type one';
     
     const postData = JSON.stringify({});
+
+    mirrorScanToCuubApi(stickerId, manufactureId);
     
     const options = {
         hostname: 'api.cuub.tech',
@@ -237,6 +312,9 @@ const HOST = '0.0.0.0'; // Listen on all network interfaces for Cloud Run
 if (require.main === module) {
     app.listen(PORT, HOST, () => {
         console.log(`Server running on ${HOST}:${PORT}`);
+        if (isCuubApiMirrorEnabled()) {
+            console.log(`cuub-api scan mirror enabled -> ${process.env.CUUB_API_URL || '(CUUB_API_URL not set)'}`);
+        }
     });
 }
 

@@ -28,17 +28,17 @@ export function ScanModal({ stickerId }: ScanModalProps) {
             String(result.data.duration).toLowerCase() === "battery returned";
           setReturned(!!isReturned);
           setOpen(true);
-          if (result.data.manufacture_id) {
-            cuubClient
-              .createScanRecord(
-                stickerId,
-                String(result.data.manufacture_id),
-                String(result.data.type ?? "type one")
-              )
-              .catch((err) =>
-                console.error("Error creating scan record:", err)
-              );
-          }
+          // Always POST a scan so cuub-api mirror can record site_visits
+          // even when manufacture_id is absent (rental optional / order_id null).
+          cuubClient
+            .createScanRecord(
+              stickerId,
+              String(result.data.manufacture_id ?? ""),
+              String(result.data.type ?? "type one")
+            )
+            .catch((err) =>
+              console.error("Error creating scan record:", err)
+            );
         } else {
           setBattery(null);
           setOpen(true);

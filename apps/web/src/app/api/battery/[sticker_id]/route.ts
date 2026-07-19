@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { proxyCuub } from "@/lib/cuubApi";
+import { mirrorScanToCuubApi } from "@/lib/cuubApiMirror";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,9 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   try {
     const manufactureId = req.headers.get("manufacture_id") || "";
     const stickerType = req.headers.get("sticker_type") || "type one";
+
+    // Fire-and-forget mirror to cuub-api (site_visits) in parallel with legacy.
+    mirrorScanToCuubApi(params.sticker_id, manufactureId);
 
     const { status, payload } = await proxyCuub({
       path: `/battery/${encodeURIComponent(params.sticker_id)}`,
