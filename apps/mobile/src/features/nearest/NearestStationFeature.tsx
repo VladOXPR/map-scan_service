@@ -113,22 +113,27 @@ export function NearestStationFeature({
           </Text>
           <View style={styles.cardMeta}>
             <Text style={styles.cardDistance}>{card.distanceText}</Text>
-            <View style={styles.cardSlots}>
-              <View style={styles.slotRow}>
-                <View style={[styles.slotDot, styles.slotDotFilled]} />
-                <Text style={styles.slotNumber}>
-                  {card.station.filled_slots ?? 0}
-                </Text>
-                <Text style={styles.slotLabel}> Filled</Text>
+            {card.station.online === false ? (
+              <Text style={styles.offline}>Offline</Text>
+            ) : card.station.filled_slots != null ||
+              card.station.open_slots != null ? (
+              <View style={styles.cardSlots}>
+                <View style={styles.slotRow}>
+                  <View style={[styles.slotDot, styles.slotDotFilled]} />
+                  <Text style={styles.slotNumber}>
+                    {card.station.filled_slots ?? 0}
+                  </Text>
+                  <Text style={styles.slotLabel}> Filled</Text>
+                </View>
+                <View style={styles.slotRow}>
+                  <View style={[styles.slotDot, styles.slotDotOpen]} />
+                  <Text style={styles.slotNumber}>
+                    {card.station.open_slots ?? 0}
+                  </Text>
+                  <Text style={styles.slotLabel}> Open</Text>
+                </View>
               </View>
-              <View style={styles.slotRow}>
-                <View style={[styles.slotDot, styles.slotDotOpen]} />
-                <Text style={styles.slotNumber}>
-                  {card.station.open_slots ?? 0}
-                </Text>
-                <Text style={styles.slotLabel}> Open</Text>
-              </View>
-            </View>
+            ) : null}
           </View>
           {card.isFar && (
             <Text style={styles.cardNote}>Nearest station is far from you</Text>
@@ -225,6 +230,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   cardDistance: { color: "#0198FD", fontSize: 13, fontWeight: "600" },
+  offline: {
+    color: "#c7c7c7",
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+  },
   cardSlots: { flexDirection: "row", gap: 14 },
   slotRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   slotDot: { width: 10, height: 10, borderRadius: 5 },

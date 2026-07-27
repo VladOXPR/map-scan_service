@@ -180,7 +180,8 @@ export function MapView({
       // separate (circle) bucket from the symbol bucket — guaranteeing a
       // visible pin per station coordinate even if symbol rendering fails.
       // The SVG icon layer below sits on top and covers this once icons
-      // are registered.
+      // are registered. Hide it for offline stations so the 40% opacity
+      // icon isn't backed by a white/blue disk.
       map.addLayer({
         id: "unclustered-circle",
         type: "circle",
@@ -191,7 +192,18 @@ export function MapView({
           "circle-color": "#ffffff",
           "circle-stroke-width": 2,
           "circle-stroke-color": "#0198FD",
-          "circle-stroke-opacity": 1,
+          "circle-opacity": [
+            "case",
+            ["==", ["get", "online"], false],
+            0,
+            1,
+          ],
+          "circle-stroke-opacity": [
+            "case",
+            ["==", ["get", "online"], false],
+            0,
+            1,
+          ],
         },
       });
 
@@ -201,12 +213,8 @@ export function MapView({
         source: "stations",
         filter: ["!", ["has", "point_count"]],
         layout: {
-          // Pick station-icon-{0..6} based on filled_slots. Coalesce missing
-          // values to 6 (the most common state when slot data is absent),
-          // clamp into [0..6], and route the trailing default through
-          // station-icon-6 too. Every branch maps to a placeholder that's
-          // already registered by loadStationIcons(), so the bucket never
-          // sees a missing image.
+          // Icon0–6 from filled_slots (coalesce missing → 6). Offline uses
+          // the same icon at 40% opacity (see icon-opacity below).
           "icon-image": [
             "match",
             ["min", 6, ["to-number", ["coalesce", ["get", "filled_slots"], 6]]],
@@ -225,6 +233,14 @@ export function MapView({
               : 1,
           "icon-allow-overlap": true,
           "icon-ignore-placement": true,
+        },
+        paint: {
+          "icon-opacity": [
+            "case",
+            ["==", ["get", "online"], false],
+            0.4,
+            1,
+          ],
         },
       });
 

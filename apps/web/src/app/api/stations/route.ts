@@ -1,20 +1,14 @@
 import { NextResponse } from "next/server";
-import {
-  STATIONS_REVALIDATE_SECONDS,
-  getCachedStationsResult,
-} from "@/lib/getInitialStations";
+import { STATIONS_REVALIDATE_SECONDS, getStationsResult } from "@/lib/getInitialStations";
 
-// `force-dynamic` is gone: we WANT this cached. The upstream proxy call is
-// memoized by unstable_cache, so the actual round-trip to api.cuub.tech only
-// happens once per revalidate window per server instance.
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
-    const { status, payload } = await getCachedStationsResult();
+    const { status, payload } = await getStationsResult();
     return NextResponse.json(payload, {
       status,
       headers: {
-        // Browser: 60s. CDN/edge: full revalidate window. SWR keeps responses
-        // snappy at the moment of expiry.
         "Cache-Control": `public, max-age=60, s-maxage=${STATIONS_REVALIDATE_SECONDS}, stale-while-revalidate=600`,
       },
     });

@@ -129,9 +129,8 @@ export function MapScreen({
             id="unclustered-point"
             filter={["!", ["has", "point_count"]]}
             style={{
-              // Pick station-icon-{0..6} from filled_slots. Same expression
-              // as the web map (apps/web/src/features/map-view/MapView.tsx)
-              // so the two clients stay visually in sync.
+              // Icon0–6 from filled_slots (coalesce missing → 6). Offline
+              // uses the same icon at 40% opacity. Keep in sync with web.
               iconImage: [
                 "match",
                 ["min", 6, ["to-number", ["coalesce", ["get", "filled_slots"], 6]]],
@@ -148,6 +147,12 @@ export function MapScreen({
                 variant === "full"
                   ? (["case", ["get", "selected"], 1.2, 1] as unknown as number)
                   : 1,
+              iconOpacity: [
+                "case",
+                ["==", ["get", "online"], false],
+                0.4,
+                1,
+              ] as unknown as number,
               iconAllowOverlap: true,
               iconIgnorePlacement: true,
               iconAnchor: "center",

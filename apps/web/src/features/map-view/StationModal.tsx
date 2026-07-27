@@ -48,13 +48,18 @@ export function StationModal({
     }, 0);
   };
 
-  const showSlots = !!station && (hasValue(station.filled_slots) || hasValue(station.open_slots));
+  const isOffline = station?.online === false;
+  const showSlots =
+    !!station &&
+    !isOffline &&
+    (hasValue(station.filled_slots) || hasValue(station.open_slots));
 
   return (
     <div ref={ref} className={`station-modal ${station ? "active" : ""}`}>
       <div className="modal-content">
         <div className="modal-header">
           <div className="modal-title">{station?.title || "Title"}</div>
+          {isOffline && <div className="modal-offline">Offline</div>}
           {showSlots && (
             <div className="modal-slots">
               <div className="slot-info">

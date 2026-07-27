@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { proxyCuub } from "@/lib/cuubApi";
-import { mirrorScanToCuubApi } from "@/lib/cuubApiMirror";
+import { proxyCuubBattery } from "@/lib/cuubApi";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +9,7 @@ interface RouteContext {
 
 export async function GET(_req: NextRequest, { params }: RouteContext) {
   try {
-    const { status, payload } = await proxyCuub({
+    const { status, payload } = await proxyCuubBattery({
       path: `/battery/${encodeURIComponent(params.sticker_id)}`,
       method: "GET",
     });
@@ -29,10 +28,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     const manufactureId = req.headers.get("manufacture_id") || "";
     const stickerType = req.headers.get("sticker_type") || "type one";
 
-    // Fire-and-forget mirror to cuub-api (site_visits) in parallel with legacy.
-    mirrorScanToCuubApi(params.sticker_id, manufactureId);
-
-    const { status, payload } = await proxyCuub({
+    const { status, payload } = await proxyCuubBattery({
       path: `/battery/${encodeURIComponent(params.sticker_id)}`,
       method: "POST",
       headers: {
@@ -52,25 +48,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: RouteContext) {
-  try {
-    const manufactureId = req.headers.get("manufacture_id") || "";
-
-    const { status, payload } = await proxyCuub({
-      path: `/battery/${encodeURIComponent(params.sticker_id)}`,
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        manufacture_id: manufactureId,
-      },
-      body: JSON.stringify({ sizl: true }),
-    });
-    return NextResponse.json(payload, { status });
-  } catch (err) {
-    console.error("Error updating sizl status:", err);
-    return NextResponse.json(
-      { success: false, error: "Failed to update sizl status" },
-      { status: 500 }
-    );
-  }
+// sizl advert flow deprecated — noop stub for legacy clients.
+export async function PATCH(_req: NextRequest, _ctx: RouteContext) {
+  return NextResponse.json({ success: true });
 }

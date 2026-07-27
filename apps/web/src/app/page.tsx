@@ -1,6 +1,8 @@
 import { MapView } from "@/features/map-view/MapView";
 import { getInitialStations } from "@/lib/getInitialStations";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home({
   searchParams,
 }: {

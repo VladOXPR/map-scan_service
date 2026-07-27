@@ -5,6 +5,8 @@ import { getInitialStations } from "@/lib/getInitialStations";
 
 const RESERVED = new Set(["map", "blank", "api", "_next", "favicon.ico"]);
 
+export const dynamic = "force-dynamic";
+
 export default async function StickerPage({
   params,
   searchParams,

@@ -5,20 +5,33 @@ const http = require('http');
 const https = require('https');
 const app = express();
 
-function isCuubApiMirrorEnabled() {
-    const flag = process.env.CUUB_API_MIRROR_ENABLED;
-    return flag === 'true' || flag === '1';
+function cuubApiUrl() {
+    const url = process.env.CUUB_API_URL?.trim();
+    return url ? url.replace(/\/$/, '') : null;
 }
 
-function mirrorScanToCuubApi(stickerId, manufactureId) {
-    if (!isCuubApiMirrorEnabled()) {
+function cuubApiToken() {
+    return process.env.CUUB_API_TOKEN?.trim() || null;
+}
+
+function parseJson(text) {
+    try {
+        return text ? JSON.parse(text) : null;
+    } catch {
+        return null;
+    }
+}
+
+function fetchCuubApi({ path, method, headers, body, requireAuth }, callback) {
+    const baseUrl = cuubApiUrl();
+    const token = cuubApiToken();
+
+    if (!baseUrl) {
+        callback(503, { success: false, error: 'CUUB_API_URL is not configured' });
         return;
     }
-
-    const baseUrl = process.env.CUUB_API_URL?.trim();
-    const token = process.env.CUUB_API_TOKEN?.trim();
-    if (!baseUrl || !token) {
-        console.warn('[cuub-api mirror] CUUB_API_MIRROR_ENABLED but CUUB_API_URL or CUUB_API_TOKEN is missing');
+    if (requireAuth && !token) {
+        callback(503, { success: false, error: 'CUUB_API_TOKEN is not configured' });
         return;
     }
 
@@ -26,77 +39,140 @@ function mirrorScanToCuubApi(stickerId, manufactureId) {
     try {
         parsed = new URL(baseUrl);
     } catch (error) {
-        console.error('[cuub-api mirror] Invalid CUUB_API_URL:', baseUrl, error.message);
+        callback(500, { success: false, error: 'Invalid CUUB_API_URL' });
         return;
     }
 
-    const postData = JSON.stringify({});
     const isHttps = parsed.protocol === 'https:';
     const client = isHttps ? https : http;
     const port = parsed.port || (isHttps ? 443 : 80);
-    const requestPath = `/battery/${encodeURIComponent(stickerId)}`;
+    const postData = body ?? null;
 
     const options = {
         hostname: parsed.hostname,
         port,
-        path: requestPath,
-        method: 'POST',
+        path,
+        method,
         headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData),
-            Authorization: `Bearer ${token}`,
-            ...(manufactureId ? { manufacture_id: manufactureId } : {}),
+            Accept: 'application/json',
+            ...(requireAuth ? { Authorization: `Bearer ${token}` } : {}),
+            ...(headers ?? {}),
+            ...(postData
+                ? { 'Content-Length': Buffer.byteLength(postData) }
+                : {}),
         },
     };
 
-    const mirrorRequest = client.request(options, (mirrorResponse) => {
+    const request = client.request(options, (apiResponse) => {
         let data = '';
-
-        mirrorResponse.on('data', (chunk) => {
+        apiResponse.on('data', (chunk) => {
             data += chunk;
         });
-
-        mirrorResponse.on('end', () => {
-            if (mirrorResponse.statusCode === 201) {
-                console.log(`[cuub-api mirror] scan recorded for ${stickerId}`);
+        apiResponse.on('end', () => {
+            const json = parseJson(data);
+            if (json === null) {
+                callback(500, { success: false, error: 'Failed to parse API response' });
                 return;
             }
-
-            console.warn(
-                `[cuub-api mirror] ${stickerId} -> HTTP ${mirrorResponse.statusCode}:`,
-                data.slice(0, 300),
-            );
+            callback(apiResponse.statusCode || 500, json);
         });
     });
 
-    mirrorRequest.on('error', (error) => {
-        console.warn(`[cuub-api mirror] ${stickerId} network error:`, error.message);
+    request.on('error', (error) => {
+        console.error('cuub-api request error:', error);
+        callback(502, { success: false, error: 'Failed to reach cuub-api' });
     });
 
-    mirrorRequest.write(postData);
-    mirrorRequest.end();
+    if (postData) {
+        request.write(postData);
+    }
+    request.end();
+}
+
+function hasValidCoords(latitude, longitude) {
+    if (latitude == null || longitude == null) return false;
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+    return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+}
+
+function adaptMapToStations(mapPayload) {
+    if (!mapPayload?.success || !Array.isArray(mapPayload.data)) {
+        return { success: false, error: 'Invalid map response from cuub-api' };
+    }
+
+    const data = mapPayload.data
+        .filter((row) => row.hasStation !== false)
+        .filter((row) => hasValidCoords(row.latitude, row.longitude))
+        .map((row) => ({
+            id: row.locationId,
+            title: row.title,
+            latitude: row.latitude,
+            longitude: row.longitude,
+            filled_slots: null,
+            open_slots: null,
+            online: null,
+        }));
+
+    return { success: true, data, count: data.length };
+}
+
+function adaptLiveStations(livePayload) {
+    if (!livePayload?.success || !Array.isArray(livePayload.data)) {
+        return { success: false, error: 'Invalid live stations response from cuub-api' };
+    }
+
+    const data = livePayload.data
+        .map((row) => {
+            const loc = row.currentLocation;
+            if (!loc || loc.isInventory === true) return null;
+            if (!hasValidCoords(loc.latitude, loc.longitude)) return null;
+            if (!row.manufactureId) return null;
+
+            const live = row.live ?? null;
+            return {
+                id: row.manufactureId,
+                title: loc.title,
+                latitude: loc.latitude,
+                longitude: loc.longitude,
+                filled_slots: live?.batteryCount ?? null,
+                open_slots: live?.openSlots ?? null,
+                online: live ? (live.online ?? false) : null,
+            };
+        })
+        .filter(Boolean);
+
+    return { success: true, data, count: data.length };
+}
+
+function respondWithPublicMap(res) {
+    fetchCuubApi({ path: '/map', method: 'GET', requireAuth: false }, (status, payload) => {
+        if (status !== 200) {
+            return res.status(status).json(payload);
+        }
+        const adapted = adaptMapToStations(payload);
+        if (!adapted.success) {
+            return res.status(502).json(adapted);
+        }
+        res.json(adapted);
+    });
 }
 
 // Allow embedding in iframes (e.g. Framer at framer.com, map.cuub.tech)
 app.use((req, res, next) => {
-    // Permit any parent origin to frame this app (replaces restrictive X-Frame-Options)
     res.setHeader('Content-Security-Policy', 'frame-ancestors *');
     res.removeHeader('X-Frame-Options');
-    // Allow geolocation inside cross-origin iframes. The parent page MUST still
-    // include allow="geolocation" on the <iframe> tag for browsers to delegate it.
     res.setHeader('Permissions-Policy', 'geolocation=*');
     next();
 });
 
-// Enable CORS for API endpoints
 app.use('/api', (req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     next();
 });
 
-// Mapbox public token from env (keeps pk. token out of git for push protection)
 app.get('/api/mapbox-token', (req, res) => {
     const token = process.env.MAPBOX_ACCESS_TOKEN;
     if (!token) {
@@ -105,216 +181,98 @@ app.get('/api/mapbox-token', (req, res) => {
     res.json({ token });
 });
 
-// Proxy endpoint for CUUB stations API
 app.get('/api/stations', (req, res) => {
-    const options = {
-        hostname: 'api.cuub.tech',
-        path: '/stations',
-        method: 'GET',
-        headers: {
-            'Accept': 'application/json'
-        }
-    };
+    const livePath =
+        '/stations?include_live=true&is_inventory=false&limit=200';
 
-    const request = https.request(options, (apiResponse) => {
-        let data = '';
+    if (!cuubApiToken()) {
+        return respondWithPublicMap(res);
+    }
 
-        apiResponse.on('data', (chunk) => {
-            data += chunk;
-        });
-
-        apiResponse.on('end', () => {
-            try {
-                const jsonData = JSON.parse(data);
-                res.json(jsonData);
-            } catch (error) {
-                console.error('Error parsing API response:', error);
-                res.status(500).json({ success: false, error: 'Failed to parse API response' });
+    fetchCuubApi({ path: livePath, method: 'GET', requireAuth: true }, (status, payload) => {
+        if (status === 200 && payload?.success && Array.isArray(payload.data)) {
+            const adapted = adaptLiveStations(payload);
+            if (adapted.success) {
+                return res.json(adapted);
             }
-        });
-    });
+        }
 
-    request.on('error', (error) => {
-        console.error('Error fetching stations:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch stations' });
+        console.warn(
+            '[stations] live include_live fetch failed; falling back to GET /map:',
+            status,
+        );
+        respondWithPublicMap(res);
     });
-
-    request.end();
 });
 
-// Proxy endpoint for CUUB battery API (GET)
 app.get('/api/battery/:sticker_id', (req, res) => {
     const stickerId = req.params.sticker_id;
-    
-    const options = {
-        hostname: 'api.cuub.tech',
-        path: `/battery/${stickerId}`,
-        method: 'GET',
-        headers: {
-            'Accept': 'application/json'
-        }
-    };
-
-    const request = https.request(options, (apiResponse) => {
-        let data = '';
-
-        apiResponse.on('data', (chunk) => {
-            data += chunk;
-        });
-
-        apiResponse.on('end', () => {
-            try {
-                const jsonData = JSON.parse(data);
-                res.json(jsonData);
-            } catch (error) {
-                console.error('Error parsing API response:', error);
-                res.status(500).json({ success: false, error: 'Failed to parse API response' });
-            }
-        });
-    });
-
-    request.on('error', (error) => {
-        console.error('Error fetching battery data:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch battery data' });
-    });
-
-    request.end();
+    fetchCuubApi(
+        {
+            path: `/battery/${encodeURIComponent(stickerId)}`,
+            method: 'GET',
+            requireAuth: true,
+        },
+        (status, payload) => res.status(status).json(payload),
+    );
 });
 
-// Proxy endpoint for CUUB battery API (POST - create scan record)
 app.post('/api/battery/:sticker_id', express.json(), (req, res) => {
     const stickerId = req.params.sticker_id;
     const manufactureId = req.headers['manufacture_id'];
     const stickerType = req.headers['sticker_type'] || 'type one';
-    
     const postData = JSON.stringify({});
 
-    mirrorScanToCuubApi(stickerId, manufactureId);
-    
-    const options = {
-        hostname: 'api.cuub.tech',
-        path: `/battery/${stickerId}`,
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData),
-            'manufacture_id': manufactureId || '',
-            'sticker_type': stickerType
-        }
-    };
-
-    const request = https.request(options, (apiResponse) => {
-        let data = '';
-
-        apiResponse.on('data', (chunk) => {
-            data += chunk;
-        });
-
-        apiResponse.on('end', () => {
-            try {
-                const jsonData = JSON.parse(data);
-                res.json(jsonData);
-            } catch (error) {
-                console.error('Error parsing API response:', error);
-                res.status(500).json({ success: false, error: 'Failed to parse API response' });
-            }
-        });
-    });
-
-    request.on('error', (error) => {
-        console.error('Error creating scan record:', error);
-        res.status(500).json({ success: false, error: 'Failed to create scan record' });
-    });
-
-    request.write(postData);
-    request.end();
+    fetchCuubApi(
+        {
+            path: `/battery/${encodeURIComponent(stickerId)}`,
+            method: 'POST',
+            requireAuth: true,
+            body: postData,
+            headers: {
+                'Content-Type': 'application/json',
+                manufacture_id: manufactureId || '',
+                sticker_type: stickerType,
+            },
+        },
+        (status, payload) => res.status(status).json(payload),
+    );
 });
 
-// Proxy endpoint for CUUB battery API (PATCH - update sizl redirect status)
+// sizl advert flow deprecated — noop stub for legacy clients.
 app.patch('/api/battery/:sticker_id', express.json(), (req, res) => {
-    const stickerId = req.params.sticker_id;
-    const manufactureId = req.headers['manufacture_id'];
-    
-    const patchData = JSON.stringify({ sizl: true });
-    
-    const options = {
-        hostname: 'api.cuub.tech',
-        path: `/battery/${stickerId}`,
-        method: 'PATCH',
-        headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(patchData),
-            'manufacture_id': manufactureId || ''
-        }
-    };
-
-    const request = https.request(options, (apiResponse) => {
-        let data = '';
-
-        apiResponse.on('data', (chunk) => {
-            data += chunk;
-        });
-
-        apiResponse.on('end', () => {
-            try {
-                const jsonData = JSON.parse(data);
-                res.json(jsonData);
-            } catch (error) {
-                console.error('Error parsing API response:', error);
-                res.status(500).json({ success: false, error: 'Failed to parse API response' });
-            }
-        });
-    });
-
-    request.on('error', (error) => {
-        console.error('Error updating sizl status:', error);
-        res.status(500).json({ success: false, error: 'Failed to update sizl status' });
-    });
-
-    request.write(patchData);
-    request.end();
+    res.json({ success: true });
 });
 
-// Serve map view as default
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'map_view.html'));
 });
 
-// Also serve map view at /map for backwards compatibility
 app.get('/map', (req, res) => {
     res.sendFile(path.join(__dirname, 'map_view.html'));
 });
 
-// Embed-friendly URL (matches Framer iframe pattern: .../map.html)
 app.get('/map.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'map_view.html'));
 });
 
-// Map only: stations, no scan UI or support button
 app.get('/blank', (req, res) => {
     res.sendFile(path.join(__dirname, 'map_blank.html'));
 });
 
-// Serve static files (HTML, JS, CSS) - serves existing files, passes through for non-files
 app.use(express.static(__dirname));
 
-// Serve map view with scan service for sticker_id routes
-// This catch-all route should come after static file serving
 app.get('/:sticker_id', (req, res) => {
-    // Serve map view with scan service for sticker IDs
     res.sendFile(path.join(__dirname, 'map_view.html'));
 });
 
-// Start server - Cloud Run will set PORT environment variable
 const PORT = process.env.PORT || 8080;
-const HOST = '0.0.0.0'; // Listen on all network interfaces for Cloud Run
+const HOST = '0.0.0.0';
 
 if (require.main === module) {
     app.listen(PORT, HOST, () => {
         console.log(`Server running on ${HOST}:${PORT}`);
-        if (isCuubApiMirrorEnabled()) {
-            console.log(`cuub-api scan mirror enabled -> ${process.env.CUUB_API_URL || '(CUUB_API_URL not set)'}`);
-        }
+        console.log(`cuub-api upstream -> ${cuubApiUrl() || '(CUUB_API_URL not set)'}`);
     });
 }
 

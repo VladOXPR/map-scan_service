@@ -61,11 +61,18 @@ export function NearestStationFeature({
   const [userCoords, setUserCoords] = useState<Coords | null>(null);
   const [nearest, setNearest] = useState<NearestStationView | null>(null);
   const [cardVisible, setCardVisible] = useState(false);
+  // Defer geolocation check until after mount so SSR HTML matches the
+  // first client render (navigator is undefined on the server).
+  const [canLocate, setCanLocate] = useState(false);
 
   const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const haloPulseRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pendingLocateRef = useRef(false);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setCanLocate(hasGeolocation());
+  }, []);
 
   const showToast = useCallback((message: string, durationMs: number = 4000) => {
     setToast(message);
@@ -436,7 +443,7 @@ export function NearestStationFeature({
 
   return (
     <>
-      {!hideTriggerButton && hasGeolocation() && (
+      {!hideTriggerButton && canLocate && (
         <button
           type="button"
           className={`cuub-nearest-button ${stickerClass}`}
@@ -503,22 +510,27 @@ export function NearestStationFeature({
             <div className="cuub-nearest-card-distance">
               {nearest.distanceText}
             </div>
-            <div className="cuub-nearest-card-slots">
-              <div className="cuub-nearest-slot">
-                <span className="cuub-nearest-slot-dot filled" />
-                <span className="cuub-nearest-slot-number">
-                  {nearest.station.filled_slots ?? 0}
-                </span>
-                <span>Filled</span>
+            {nearest.station.online === false ? (
+              <div className="cuub-nearest-offline">Offline</div>
+            ) : nearest.station.filled_slots != null ||
+              nearest.station.open_slots != null ? (
+              <div className="cuub-nearest-card-slots">
+                <div className="cuub-nearest-slot">
+                  <span className="cuub-nearest-slot-dot filled" />
+                  <span className="cuub-nearest-slot-number">
+                    {nearest.station.filled_slots ?? 0}
+                  </span>
+                  <span>Filled</span>
+                </div>
+                <div className="cuub-nearest-slot">
+                  <span className="cuub-nearest-slot-dot open" />
+                  <span className="cuub-nearest-slot-number">
+                    {nearest.station.open_slots ?? 0}
+                  </span>
+                  <span>Open</span>
+                </div>
               </div>
-              <div className="cuub-nearest-slot">
-                <span className="cuub-nearest-slot-dot open" />
-                <span className="cuub-nearest-slot-number">
-                  {nearest.station.open_slots ?? 0}
-                </span>
-                <span>Open</span>
-              </div>
-            </div>
+            ) : null}
           </div>
           {nearest.isFar && (
             <div className="cuub-nearest-card-note">

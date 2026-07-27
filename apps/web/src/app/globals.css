@@ -77,6 +77,14 @@ body {
   align-items: flex-end;
 }
 
+.modal-offline {
+  color: #c7c7c7;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
 .slot-info {
   display: flex;
   align-items: center;
@@ -385,6 +393,14 @@ body.cuub-sticker-page .cuub-nearest-card {
   display: flex;
   gap: 14px;
   align-items: center;
+}
+
+.cuub-nearest-offline {
+  color: #c7c7c7;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .cuub-nearest-slot {

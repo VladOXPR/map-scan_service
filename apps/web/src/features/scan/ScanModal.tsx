@@ -28,7 +28,7 @@ export function ScanModal({ stickerId }: ScanModalProps) {
             String(result.data.duration).toLowerCase() === "battery returned";
           setReturned(!!isReturned);
           setOpen(true);
-          // Always POST a scan so cuub-api mirror can record site_visits
+          // POST records site_visits on cuub-api (direct cutover).
           // even when manufacture_id is absent (rental optional / order_id null).
           cuubClient
             .createScanRecord(

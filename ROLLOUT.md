@@ -58,6 +58,7 @@ The repo `Dockerfile` is now a multi-stage Next.js build. Deploy with the same `
 - `CUUB_API_MIRROR_ENABLED=true` — mirror scan POSTs to cuub-api (optional but required for dashboard Batteries visits)
 - `CUUB_API_URL` — deployed cuub-api URL (e.g. `https://cuub-api-406495793630.us-central1.run.app`)
 - `CUUB_API_TOKEN` — same as cuub-api `MACHINE_API_TOKEN`
+- cuub-api Cloud Run must grant `roles/run.invoker` to map-scan’s service account (default compute SA). The mirror sends a Google identity token for IAM and passes `CUUB_API_TOKEN` via `x-api-key`. Org policy may block `allUsers` invoker; that is fine.
 
 ### Mobile (EAS / native)
 

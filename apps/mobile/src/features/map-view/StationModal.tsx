@@ -14,8 +14,11 @@ function hasValue(value: unknown): boolean {
 
 export function StationModal({ station, onClose }: StationModalProps) {
   const visible = !!station;
+  const isOffline = station?.online === false;
   const showSlots =
-    !!station && (hasValue(station.filled_slots) || hasValue(station.open_slots));
+    !!station &&
+    !isOffline &&
+    (hasValue(station.filled_slots) || hasValue(station.open_slots));
 
   return (
     <Modal
@@ -28,6 +31,7 @@ export function StationModal({ station, onClose }: StationModalProps) {
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.header}>
             <Text style={styles.title}>{station?.title || "Title"}</Text>
+            {isOffline && <Text style={styles.offline}>Offline</Text>}
             {showSlots && (
               <View style={styles.slots}>
                 <View style={styles.slotInfo}>
@@ -92,6 +96,13 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   title: { color: "#fff", fontSize: 18, fontWeight: "600", flex: 1 },
+  offline: {
+    color: "#c7c7c7",
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+  },
   slots: { alignItems: "flex-end", gap: 12 },
   slotInfo: { flexDirection: "row", alignItems: "center", gap: 8 },
   slotIcon: { width: 12, height: 12, borderRadius: 6 },

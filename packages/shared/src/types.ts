@@ -5,6 +5,8 @@ export interface Station {
   longitude: string | number;
   filled_slots?: number | string | null;
   open_slots?: number | string | null;
+  /** true/false when Energo live data is present; null when unknown / token down */
+  online?: boolean | null;
 }
 
 export interface Coords {
