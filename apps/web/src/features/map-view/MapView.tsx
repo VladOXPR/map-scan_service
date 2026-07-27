@@ -180,8 +180,8 @@ export function MapView({
       // separate (circle) bucket from the symbol bucket — guaranteeing a
       // visible pin per station coordinate even if symbol rendering fails.
       // The SVG icon layer below sits on top and covers this once icons
-      // are registered. Hide it for offline stations so the 40% opacity
-      // icon isn't backed by a white/blue disk.
+      // are registered. Hide it for offline/inactive stations so the 40%
+      // opacity icon isn't backed by a white/blue disk.
       map.addLayer({
         id: "unclustered-circle",
         type: "circle",
@@ -194,13 +194,21 @@ export function MapView({
           "circle-stroke-color": "#0198FD",
           "circle-opacity": [
             "case",
-            ["==", ["get", "online"], false],
+            [
+              "any",
+              ["==", ["get", "online"], false],
+              ["==", ["get", "inactive"], true],
+            ],
             0,
             1,
           ],
           "circle-stroke-opacity": [
             "case",
-            ["==", ["get", "online"], false],
+            [
+              "any",
+              ["==", ["get", "online"], false],
+              ["==", ["get", "inactive"], true],
+            ],
             0,
             1,
           ],
@@ -213,8 +221,8 @@ export function MapView({
         source: "stations",
         filter: ["!", ["has", "point_count"]],
         layout: {
-          // Icon0–6 from filled_slots (coalesce missing → 6). Offline uses
-          // the same icon at 40% opacity (see icon-opacity below).
+          // Icon0–6 from filled_slots (coalesce missing → 6). Offline and
+          // inactive use the same icon at 40% opacity (see icon-opacity).
           "icon-image": [
             "match",
             ["min", 6, ["to-number", ["coalesce", ["get", "filled_slots"], 6]]],
@@ -237,7 +245,11 @@ export function MapView({
         paint: {
           "icon-opacity": [
             "case",
-            ["==", ["get", "online"], false],
+            [
+              "any",
+              ["==", ["get", "online"], false],
+              ["==", ["get", "inactive"], true],
+            ],
             0.4,
             1,
           ],

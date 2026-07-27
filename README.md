@@ -40,7 +40,7 @@ npm run mobile:start
 - `MAPBOX_ACCESS_TOKEN` lives only on the Next.js server and is fetched by clients via `/api/mapbox-token`.
 - The mobile app reads `EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN` from its own env so it can initialize the native Mapbox SDK without a token round-trip.
 - All CUUB battery/station calls go through Next API routes for both clients.
-- Station pins prefer live Energo enrichment from cuub-api (`include_live=true`, same token path as the dashboard). Online stations show `Icon0`–`Icon6` from filled slot count; offline stations use the same icon at 40% opacity. If the live call fails, the map falls back to public `GET /map` pins without slot counts.
+- Station pins prefer live Energo enrichment from cuub-api (`include_live=true`, same token path as the dashboard). Online stations show `Icon0`–`Icon6` from filled slot count; offline and inactive locations use the same icon at 40% opacity. Inactive venues are included even without a station; inventory locations are never shown. If the live call fails, the map falls back to public `GET /map` pins without slot counts.
 
 ## Routes
 

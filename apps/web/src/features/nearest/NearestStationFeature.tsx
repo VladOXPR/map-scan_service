@@ -510,7 +510,9 @@ export function NearestStationFeature({
             <div className="cuub-nearest-card-distance">
               {nearest.distanceText}
             </div>
-            {nearest.station.online === false ? (
+            {nearest.station.inactive === true ? (
+              <div className="cuub-nearest-offline">Inactive</div>
+            ) : nearest.station.online === false ? (
               <div className="cuub-nearest-offline">Offline</div>
             ) : nearest.station.filled_slots != null ||
               nearest.station.open_slots != null ? (

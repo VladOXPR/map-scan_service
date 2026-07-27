@@ -96,6 +96,10 @@ function hasValidCoords(latitude, longitude) {
     return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
 }
 
+function locationStatus(value) {
+    return String(value ?? '').toUpperCase();
+}
+
 function adaptMapToStations(mapPayload) {
     if (!mapPayload?.success || !Array.isArray(mapPayload.data)) {
         return { success: false, error: 'Invalid map response from cuub-api' };
@@ -112,6 +116,7 @@ function adaptMapToStations(mapPayload) {
             filled_slots: null,
             open_slots: null,
             online: null,
+            inactive: false,
         }));
 
     return { success: true, data, count: data.length };
@@ -122,39 +127,110 @@ function adaptLiveStations(livePayload) {
         return { success: false, error: 'Invalid live stations response from cuub-api' };
     }
 
+    const coveredLocationIds = new Set();
     const data = livePayload.data
         .map((row) => {
             const loc = row.currentLocation;
             if (!loc || loc.isInventory === true) return null;
+            const status = locationStatus(loc.status);
+            if (status === 'ARCHIVED') return null;
             if (!hasValidCoords(loc.latitude, loc.longitude)) return null;
             if (!row.manufactureId) return null;
 
+            if (loc.locationId) coveredLocationIds.add(String(loc.locationId));
+
             const live = row.live ?? null;
+            const inactive = status === 'INACTIVE';
             return {
                 id: row.manufactureId,
                 title: loc.title,
                 latitude: loc.latitude,
                 longitude: loc.longitude,
-                filled_slots: live?.batteryCount ?? null,
-                open_slots: live?.openSlots ?? null,
-                online: live ? (live.online ?? false) : null,
+                filled_slots: inactive ? null : live?.batteryCount ?? null,
+                open_slots: inactive ? null : live?.openSlots ?? null,
+                online: inactive ? null : live ? (live.online ?? false) : null,
+                inactive,
             };
         })
         .filter(Boolean);
 
+    return { success: true, data, count: data.length, coveredLocationIds };
+}
+
+function adaptInactiveLocations(payload) {
+    if (!payload?.success || !Array.isArray(payload.data)) return [];
+    return payload.data
+        .map((row) => {
+            if (!row.locationId || row.isInventory === true) return null;
+            if (locationStatus(row.status) !== 'INACTIVE') return null;
+            if (!hasValidCoords(row.latitude, row.longitude)) return null;
+            return {
+                id: row.locationId,
+                title: row.title,
+                latitude: row.latitude,
+                longitude: row.longitude,
+                filled_slots: null,
+                open_slots: null,
+                online: null,
+                inactive: true,
+            };
+        })
+        .filter(Boolean);
+}
+
+function mergeInactivePins(stations, inactivePins, coveredLocationIds) {
+    const covered = coveredLocationIds instanceof Set
+        ? coveredLocationIds
+        : new Set(coveredLocationIds ?? []);
+    const extras = inactivePins.filter((pin) => !covered.has(String(pin.id)));
+    const data = [...stations, ...extras];
     return { success: true, data, count: data.length };
 }
 
-function respondWithPublicMap(res) {
+function respondWithStations(res, stationsPayload) {
+    res.json(stationsPayload);
+}
+
+function fetchInactivePins(callback) {
+    if (!cuubApiToken()) {
+        callback([]);
+        return;
+    }
+    fetchCuubApi(
+        {
+            path: '/locations?status=INACTIVE&is_inventory=false&limit=200',
+            method: 'GET',
+            requireAuth: true,
+        },
+        (status, payload) => {
+            if (status !== 200) {
+                console.warn('[stations] inactive locations fetch failed:', status);
+                callback([]);
+                return;
+            }
+            callback(adaptInactiveLocations(payload));
+        },
+    );
+}
+
+function respondWithPublicMap(res, inactivePins = []) {
     fetchCuubApi({ path: '/map', method: 'GET', requireAuth: false }, (status, payload) => {
         if (status !== 200) {
+            if (inactivePins.length > 0) {
+                return respondWithStations(res, {
+                    success: true,
+                    data: inactivePins,
+                    count: inactivePins.length,
+                });
+            }
             return res.status(status).json(payload);
         }
         const adapted = adaptMapToStations(payload);
         if (!adapted.success) {
             return res.status(502).json(adapted);
         }
-        res.json(adapted);
+        const covered = new Set(adapted.data.map((s) => String(s.id)));
+        respondWithStations(res, mergeInactivePins(adapted.data, inactivePins, covered));
     });
 }
 
@@ -185,23 +261,32 @@ app.get('/api/stations', (req, res) => {
     const livePath =
         '/stations?include_live=true&is_inventory=false&limit=200';
 
-    if (!cuubApiToken()) {
-        return respondWithPublicMap(res);
-    }
-
-    fetchCuubApi({ path: livePath, method: 'GET', requireAuth: true }, (status, payload) => {
-        if (status === 200 && payload?.success && Array.isArray(payload.data)) {
-            const adapted = adaptLiveStations(payload);
-            if (adapted.success) {
-                return res.json(adapted);
-            }
+    fetchInactivePins((inactivePins) => {
+        if (!cuubApiToken()) {
+            return respondWithPublicMap(res, inactivePins);
         }
 
-        console.warn(
-            '[stations] live include_live fetch failed; falling back to GET /map:',
-            status,
-        );
-        respondWithPublicMap(res);
+        fetchCuubApi({ path: livePath, method: 'GET', requireAuth: true }, (status, payload) => {
+            if (status === 200 && payload?.success && Array.isArray(payload.data)) {
+                const adapted = adaptLiveStations(payload);
+                if (adapted.success && (adapted.data.length > 0 || inactivePins.length > 0)) {
+                    return respondWithStations(
+                        res,
+                        mergeInactivePins(
+                            adapted.data,
+                            inactivePins,
+                            adapted.coveredLocationIds,
+                        ),
+                    );
+                }
+            }
+
+            console.warn(
+                '[stations] live include_live fetch failed; falling back to GET /map:',
+                status,
+            );
+            respondWithPublicMap(res, inactivePins);
+        });
     });
 });
 

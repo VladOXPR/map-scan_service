@@ -6,6 +6,7 @@ export interface StationFeatureProps {
   filled_slots?: number | string | null;
   open_slots?: number | string | null;
   online?: boolean | null;
+  inactive?: boolean;
   latitude: number | string;
   longitude: number | string;
   selected: boolean;
@@ -41,6 +42,7 @@ export function stationsToGeoJSON(
         filled_slots: station.filled_slots ?? null,
         open_slots: station.open_slots ?? null,
         online: station.online ?? null,
+        inactive: station.inactive === true,
         latitude: station.latitude,
         longitude: station.longitude,
         selected: station.id === selectedId,

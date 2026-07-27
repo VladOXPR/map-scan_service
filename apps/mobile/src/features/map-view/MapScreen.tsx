@@ -130,7 +130,7 @@ export function MapScreen({
             filter={["!", ["has", "point_count"]]}
             style={{
               // Icon0–6 from filled_slots (coalesce missing → 6). Offline
-              // uses the same icon at 40% opacity. Keep in sync with web.
+              // and inactive use the same icon at 40% opacity. Keep in sync with web.
               iconImage: [
                 "match",
                 ["min", 6, ["to-number", ["coalesce", ["get", "filled_slots"], 6]]],
@@ -149,7 +149,11 @@ export function MapScreen({
                   : 1,
               iconOpacity: [
                 "case",
-                ["==", ["get", "online"], false],
+                [
+                  "any",
+                  ["==", ["get", "online"], false],
+                  ["==", ["get", "inactive"], true],
+                ],
                 0.4,
                 1,
               ] as unknown as number,

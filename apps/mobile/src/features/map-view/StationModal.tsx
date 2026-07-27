@@ -14,10 +14,12 @@ function hasValue(value: unknown): boolean {
 
 export function StationModal({ station, onClose }: StationModalProps) {
   const visible = !!station;
-  const isOffline = station?.online === false;
+  const isInactive = station?.inactive === true;
+  const isOffline = !isInactive && station?.online === false;
   const showSlots =
     !!station &&
     !isOffline &&
+    !isInactive &&
     (hasValue(station.filled_slots) || hasValue(station.open_slots));
 
   return (
@@ -31,6 +33,7 @@ export function StationModal({ station, onClose }: StationModalProps) {
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.header}>
             <Text style={styles.title}>{station?.title || "Title"}</Text>
+            {isInactive && <Text style={styles.offline}>Inactive</Text>}
             {isOffline && <Text style={styles.offline}>Offline</Text>}
             {showSlots && (
               <View style={styles.slots}>

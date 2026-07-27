@@ -48,10 +48,12 @@ export function StationModal({
     }, 0);
   };
 
-  const isOffline = station?.online === false;
+  const isInactive = station?.inactive === true;
+  const isOffline = !isInactive && station?.online === false;
   const showSlots =
     !!station &&
     !isOffline &&
+    !isInactive &&
     (hasValue(station.filled_slots) || hasValue(station.open_slots));
 
   return (
@@ -59,6 +61,7 @@ export function StationModal({
       <div className="modal-content">
         <div className="modal-header">
           <div className="modal-title">{station?.title || "Title"}</div>
+          {isInactive && <div className="modal-offline">Inactive</div>}
           {isOffline && <div className="modal-offline">Offline</div>}
           {showSlots && (
             <div className="modal-slots">

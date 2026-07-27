@@ -7,6 +7,8 @@ export interface Station {
   open_slots?: number | string | null;
   /** true/false when Energo live data is present; null when unknown / token down */
   online?: boolean | null;
+  /** true when the venue location is INACTIVE (shown at reduced opacity) */
+  inactive?: boolean;
 }
 
 export interface Coords {
