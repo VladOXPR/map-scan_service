@@ -43,7 +43,7 @@ Run from `apps/mobile`:
 - `npm run mobile:start`, then press `i` (iOS Simulator) or `a` (Android emulator). For native modules (`@rnmapbox/maps`, `expo-location`) you need a development build, not Expo Go: `npx expo prebuild` once, then `npm run mobile:ios` / `mobile:android`.
 - Set `EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN` (mobile uses native Mapbox SDK directly), `EXPO_PUBLIC_CUUB_API_BASE` (point at deployed Next app), and optionally `EXPO_PUBLIC_SUPPORT_PHONE`.
 - Routes mirror the web: `/`, `/blank`, `/<sticker_id>`.
-- Mobile station markers render the same per-slot icons as web. The native Mapbox SDK does not consume SVG, so `Icon0..Icon6.svg` are pre-rasterized to PNGs at 1x/2x/3x in `apps/mobile/assets/stations/` and registered via `<Mapbox.Images>` in `MapScreen.tsx`. To regenerate the assets after editing the source SVGs run `bash scripts/rasterize-station-icons.sh` (requires `brew install imagemagick`).
+- Mobile station markers render the same per-slot icons as web. The native Mapbox SDK does not consume SVG, so `assets/stations/Icon0..Icon6.svg` are pre-rasterized to PNGs at 1x/2x/3x in `assets/stations/` and registered via `<Mapbox.Images>` in `MapScreen.tsx`. To regenerate the assets after editing the source SVGs run `bash scripts/rasterize-station-icons.sh` (requires `brew install imagemagick`).
 - Verify: nearest-station prompt + card, station tap → bottom sheet, Directions deep-links via `Linking.openURL`, support SMS via `Linking.openURL("sms:...")`.
 
 ## 4. Deployment

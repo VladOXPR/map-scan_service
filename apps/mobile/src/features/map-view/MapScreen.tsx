@@ -14,13 +14,13 @@ import { NearestStationFeature } from "@/features/nearest/NearestStationFeature"
 // scripts/rasterize-station-icons.sh; React Native's asset density picker
 // chooses the right file at runtime.
 const STATION_ICONS = {
-  "station-icon-0": require("../../../assets/stations/icon0.png"),
-  "station-icon-1": require("../../../assets/stations/icon1.png"),
-  "station-icon-2": require("../../../assets/stations/icon2.png"),
-  "station-icon-3": require("../../../assets/stations/icon3.png"),
-  "station-icon-4": require("../../../assets/stations/icon4.png"),
-  "station-icon-5": require("../../../assets/stations/icon5.png"),
-  "station-icon-6": require("../../../assets/stations/icon6.png"),
+  "station-icon-0": require("../../../../../assets/stations/icon0.png"),
+  "station-icon-1": require("../../../../../assets/stations/icon1.png"),
+  "station-icon-2": require("../../../../../assets/stations/icon2.png"),
+  "station-icon-3": require("../../../../../assets/stations/icon3.png"),
+  "station-icon-4": require("../../../../../assets/stations/icon4.png"),
+  "station-icon-5": require("../../../../../assets/stations/icon5.png"),
+  "station-icon-6": require("../../../../../assets/stations/icon6.png"),
 };
 
 if (MAPBOX_ACCESS_TOKEN) {

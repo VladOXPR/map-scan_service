@@ -40,7 +40,7 @@ npm run mobile:start
 - `MAPBOX_ACCESS_TOKEN` lives only on the Next.js server and is fetched by clients via `/api/mapbox-token`.
 - The mobile app reads `EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN` from its own env so it can initialize the native Mapbox SDK without a token round-trip.
 - All CUUB battery/station calls go through Next API routes for both clients.
-- Station pins prefer live Energo enrichment from cuub-api (`include_live=true`, same token path as the dashboard). Online stations show `Icon0`–`Icon6` from filled slot count; offline stations use the transparent `IconOffline` pin. If the live call fails, the map falls back to public `GET /map` pins without slot counts.
+- Station pins prefer live Energo enrichment from cuub-api (`include_live=true`, same token path as the dashboard). Online stations show `Icon0`–`Icon6` from filled slot count; offline stations use the same icon at 40% opacity. If the live call fails, the map falls back to public `GET /map` pins without slot counts.
 
 ## Routes
 
@@ -57,7 +57,7 @@ Mobile (`apps/mobile`):
 
 ## Notes
 
-- Mobile station markers currently use color-coded circle layers as a clean stand-in for the SVG icons used on web. Drop PNG-rasterized versions of `Icon0..Icon6` into `apps/mobile/assets/` and switch `MapScreen.tsx` back to `SymbolLayer` + `Mapbox.Images` if pixel-perfect parity is required.
+- Mobile station markers render the same per-slot icons as web. The native Mapbox SDK does not consume SVG, so `assets/stations/Icon0..Icon6.svg` are pre-rasterized to PNGs at 1x/2x/3x in `assets/stations/` and registered via `<Mapbox.Images>` in `MapScreen.tsx`. To regenerate after editing the SVGs run `bash scripts/rasterize-station-icons.sh` (requires `brew install imagemagick`).
 - The legacy Express server is still runnable via `npm run legacy:start` until the Next deployment fully replaces it.
 
 ## Environment Variables

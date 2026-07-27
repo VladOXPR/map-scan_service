@@ -55,10 +55,10 @@ function loadOne(map: mapboxgl.Map, index: number): Promise<void> {
       resolve();
     };
     img.onerror = () => {
-      console.error(`Failed to load /Icon${index}.svg`);
+      console.error(`Failed to load /assets/stations/Icon${index}.svg`);
       resolve();
     };
-    img.src = `/Icon${index}.svg`;
+    img.src = `/assets/stations/Icon${index}.svg`;
   });
 }
 

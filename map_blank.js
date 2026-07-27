@@ -77,7 +77,7 @@ function buildTransparentPlaceholder() {
 function loadStationIconAt(index) {
     return new Promise((resolve) => {
         const id = `station-icon-${index}`;
-        const url = `/Icon${index}.svg`;
+        const url = `/assets/stations/Icon${index}.svg`;
         const img = new Image();
         img.onload = () => {
             try {

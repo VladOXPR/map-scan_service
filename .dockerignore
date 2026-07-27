@@ -22,7 +22,4 @@ apps/mobile/android
 
 # Legacy assets we don't ship to Cloud Run
 tt_hoves_pro
-sushi_burger.png
-sushi_burger.webp
-customer-service.png
 DEPLOYMENT.md
