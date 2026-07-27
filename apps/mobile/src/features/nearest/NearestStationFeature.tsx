@@ -113,9 +113,8 @@ export function NearestStationFeature({
           </Text>
           <View style={styles.cardMeta}>
             <Text style={styles.cardDistance}>{card.distanceText}</Text>
-            {card.station.inactive === true ? (
-              <Text style={styles.offline}>Inactive</Text>
-            ) : card.station.online === false ? (
+            {card.station.inactive === true ||
+            card.station.online === false ? (
               <Text style={styles.offline}>Offline</Text>
             ) : card.station.filled_slots != null ||
               card.station.open_slots != null ? (

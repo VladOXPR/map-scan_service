@@ -33,8 +33,9 @@ export function StationModal({ station, onClose }: StationModalProps) {
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.header}>
             <Text style={styles.title}>{station?.title || "Title"}</Text>
-            {isInactive && <Text style={styles.offline}>Inactive</Text>}
-            {isOffline && <Text style={styles.offline}>Offline</Text>}
+            {(isInactive || isOffline) && (
+              <Text style={styles.offline}>Offline</Text>
+            )}
             {showSlots && (
               <View style={styles.slots}>
                 <View style={styles.slotInfo}>

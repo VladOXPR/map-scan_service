@@ -61,8 +61,9 @@ export function StationModal({
       <div className="modal-content">
         <div className="modal-header">
           <div className="modal-title">{station?.title || "Title"}</div>
-          {isInactive && <div className="modal-offline">Inactive</div>}
-          {isOffline && <div className="modal-offline">Offline</div>}
+          {(isInactive || isOffline) && (
+            <div className="modal-offline">Offline</div>
+          )}
           {showSlots && (
             <div className="modal-slots">
               <div className="slot-info">
