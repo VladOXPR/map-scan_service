@@ -8,10 +8,17 @@ export interface ScanModalProps {
   stickerId: string;
 }
 
+function hasBillableRental(battery: BatteryData | null): boolean {
+  if (!battery) return false;
+  const amountPaid = Number(battery.amountPaid);
+  return Number.isFinite(amountPaid) && amountPaid > 0;
+}
+
 export function ScanModal({ stickerId }: ScanModalProps) {
   const [battery, setBattery] = useState<BatteryData | null>(null);
   const [returned, setReturned] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -25,8 +32,7 @@ export function ScanModal({ stickerId }: ScanModalProps) {
             result.data.duration &&
             String(result.data.duration).toLowerCase() === "battery returned";
           setReturned(!!isReturned);
-          // Always POST a scan so the web proxy's cuub-api mirror can record
-          // site_visits even when manufacture_id is absent.
+          setOpen(hasBillableRental(result.data));
           cuubClient
             .createScanRecord(
               stickerId,
@@ -38,10 +44,12 @@ export function ScanModal({ stickerId }: ScanModalProps) {
             );
         } else {
           setBattery(null);
+          setOpen(false);
         }
       } catch (err) {
         console.error("Error fetching battery data:", err);
         setBattery(null);
+        setOpen(false);
       } finally {
         if (!cancelled) setLoaded(true);
       }
@@ -55,22 +63,19 @@ export function ScanModal({ stickerId }: ScanModalProps) {
     battery && !returned ? String(battery.duration ?? "00:00:00") : null;
   const duration = useDurationTimer(initialDuration, !returned && !!battery);
 
-  if (!loaded) return null;
+  if (!loaded || !open || !battery) return null;
 
-  const showDurationBlock = !!battery;
-  const paid = battery ? `$${battery.amountPaid ?? 0}` : "$4";
+  const paid = `$${battery.amountPaid ?? 0}`;
 
   return (
     <View style={styles.modal}>
       <View style={styles.content}>
-        {showDurationBlock && (
-          <View style={[styles.info, styles.duration]}>
-            <Text style={styles.label}>Duration</Text>
-            <Text style={styles.value}>
-              {returned ? "Battery returned" : duration}
-            </Text>
-          </View>
-        )}
+        <View style={[styles.info, styles.duration]}>
+          <Text style={styles.label}>Duration</Text>
+          <Text style={styles.value}>
+            {returned ? "Battery returned" : duration}
+          </Text>
+        </View>
         <View style={[styles.info, styles.paid]}>
           <Text style={styles.label}>Paid</Text>
           <Text style={styles.value}>{paid}</Text>

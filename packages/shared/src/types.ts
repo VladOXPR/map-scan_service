@@ -20,6 +20,9 @@ export interface BatteryData {
   duration?: string;
   amountPaid?: number | string;
   manufacture_id?: string;
+  sticker_id?: string;
+  startTime?: string | null;
+  returnTime?: string | null;
   type?: string;
   [key: string]: unknown;
 }
