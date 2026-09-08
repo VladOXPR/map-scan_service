@@ -21,7 +21,7 @@ import {
   requestSmsCode,
 } from '@/features/auth/api';
 import { getPrivacyPolicyUrl, getTermsUrl } from '@/lib/config';
-import { colors, radius, spacing } from '@/theme';
+import { colors, spacing } from '@/theme';
 
 const stationCover = require('../../assets/illustrations/StationCover.png');
 
@@ -41,9 +41,6 @@ export default function PhoneScreen() {
   const insets = useSafeAreaInsets();
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  // Set after a code is sent; survives router.back() from OTP so the user
-  // can return without waiting out the resend cooldown.
-  const [pendingOtpPhone, setPendingOtpPhone] = useState<string | null>(null);
 
   const { control, handleSubmit, formState } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -63,7 +60,6 @@ export default function PhoneScreen() {
     try {
       const result = await requestSmsCode(phone);
       const nextPhone = result.phone || normalizePhone(phone);
-      setPendingOtpPhone(nextPhone);
       goToOtp(nextPhone);
     } catch (error) {
       setFormError(authErrorMessage(error, 'Couldn’t send a verification code'));
@@ -81,6 +77,15 @@ export default function PhoneScreen() {
           end={{ x: 0.5, y: 1 }}
           style={[styles.heroGradient, { paddingTop: insets.top }]}
         >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            onPress={() => router.replace('/(app)')}
+            style={[styles.closeButton, { top: insets.top + spacing[2] }]}
+            hitSlop={8}
+          >
+            <Text style={styles.closeIcon}>×</Text>
+          </Pressable>
           <Image
             source={stationCover}
             style={styles.heroImage}
@@ -127,30 +132,12 @@ export default function PhoneScreen() {
           ) : null}
 
           <View style={styles.footer}>
-            <View style={styles.actions}>
-              <Button
-                label="Send code"
-                variant="neutral"
-                loading={submitting}
-                onPress={onSubmit}
-                fullWidth={false}
-                style={styles.sendCodeBtn}
-              />
-              {pendingOtpPhone ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Return to verification code"
-                  disabled={submitting}
-                  onPress={() => goToOtp(pendingOtpPhone)}
-                  style={({ pressed }) => [
-                    styles.returnBtn,
-                    (pressed || submitting) && styles.returnBtnPressed,
-                  ]}
-                >
-                  <Text style={styles.returnArrow}>→</Text>
-                </Pressable>
-              ) : null}
-            </View>
+            <Button
+              label="Send code"
+              variant="neutral"
+              loading={submitting}
+              onPress={onSubmit}
+            />
             <Text variant="caption" muted style={styles.legal}>
               By continuing, you agree to our{' '}
               <Text
@@ -194,6 +181,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  closeButton: {
+    position: 'absolute',
+    left: spacing[5],
+    zIndex: 2,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeIcon: {
+    color: colors.white,
+    fontSize: 28,
+    lineHeight: 30,
+    fontWeight: '400',
+    marginTop: -1,
+  },
   heroImage: {
     width: '72%',
     height: '78%',
@@ -220,36 +227,5 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: spacing[1],
     gap: spacing[4],
-  },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    width: '100%',
-  },
-  sendCodeBtn: {
-    flex: 1,
-    alignSelf: 'auto',
-  },
-  returnBtn: {
-    width: 56,
-    height: 56,
-    flexShrink: 0,
-    borderRadius: radius.button,
-    backgroundColor: '#BBBBBB',
-    borderWidth: 1,
-    borderColor: '#DADADA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  returnBtnPressed: {
-    opacity: 0.45,
-  },
-  returnArrow: {
-    color: '#000000',
-    fontSize: 24,
-    fontWeight: '700',
-    lineHeight: 28,
-    marginTop: -1,
   },
 });

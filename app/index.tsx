@@ -16,7 +16,6 @@ const splashLogo = require('../assets/branding/splash_icon.png');
 export default function SplashGate() {
   const authHydrated = useAuthStore((s) => s.hydrated);
   const locationHydrated = useLocationStore((s) => s.hydrated);
-  const session = useAuthStore((s) => s.session);
 
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(8);
@@ -53,10 +52,6 @@ export default function SplashGate() {
         </Animated.View>
       </View>
     );
-  }
-
-  if (!session) {
-    return <Redirect href="/(auth)/phone" />;
   }
 
   return <Redirect href="/(app)" />;

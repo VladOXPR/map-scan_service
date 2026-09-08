@@ -136,11 +136,11 @@ Auth response envelope uses `{ success, data }` / `{ success: false, error }`. J
 | Method & Path | Purpose | Auth | Service function |
 |---|---|---|---|
 | `POST /app/auth/request-otp` | **Live.** Body `{ phone }` — Twilio Verify SMS; rate-limited 20s. Response `{ phone, status, sendAttempts }` | public | `requestOtp` |
-| `POST /app/auth/verify-otp` | **Live.** Body `{ phone, code }` — returns `{ token, user: { userId, phone, notifsEnabled } }` | public | `verifyOtp` |
+| `POST /app/auth/verify-otp` | **Live.** Body `{ phone, code }` — returns `{ token, user, isNewUser }` | public | `verifyOtp` |
 | `POST /app/auth/dev-login` | **Internal only** when `APP_DEV_AUTH=true`. Same session shape as verify-otp. Not used by production app UI | public | `devLogin` |
 | `GET /app/me` | Current app user profile | app_user | `getMe` |
 | `PUT /app/me/push-token` | Body `{ expoPushToken }` — store Expo push token | app_user | `setPushToken` |
-| `POST /app/me/archive` | **Required for App Store (Apple 5.1.1v).** Archive / deactivate the signed-in `app_users` row (Bearer JWT only; no body, no machine token). Client clears session on 200 and on 401/403. Never call `POST /app-users/:id/status` from the app. | app_user | `archiveMe` |
+| `DELETE /app/me` | **Required for App Store (Apple 5.1.1v).** Hard-delete the signed-in `app_users` row (Bearer JWT only; no body, no machine token). Writes an anonymous deletions tombstone, clears OTP rate limit for that phone. Same phone may register again as a new `userId` (`isNewUser: true`). Old JWT → **404** on `/app/me`. Never call `POST /app-users/:id/status` from the app. | app_user | `deleteAppUser` |
 
 ### Passthroughs — preserved as-is (ARCHITECTURE §9.3), thin wrappers over clients
 

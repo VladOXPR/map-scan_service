@@ -34,3 +34,7 @@ export async function setItem(key: string, value: string): Promise<void> {
 export async function getItem(key: string): Promise<string | null> {
   return AsyncStorage.getItem(key);
 }
+
+export async function removeItem(key: string): Promise<void> {
+  await AsyncStorage.removeItem(key);
+}

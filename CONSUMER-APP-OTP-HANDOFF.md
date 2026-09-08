@@ -186,11 +186,11 @@ Content-Type: application/json
 ```
 
 ```http
-POST /app/me/archive
+DELETE /app/me
 Authorization: Bearer <token>
 ```
 
-No body. **App Store requirement (Apple 5.1.1v):** archive / deactivate the signed-in `app_users` row. Client uses Bearer JWT only (never `POST /app-users/:id/status`, machine token, or `x-api-key`). On **200** or **401/403**, clear stored JWT/profile and show login.
+No body. **App Store requirement (Apple 5.1.1v):** hard-delete the signed-in `app_users` row (anonymous deletions tombstone may be retained). Client uses Bearer JWT only (never `POST /app-users/:id/status`, machine token, or `x-api-key`). On **200**, **401/403**, or **404**, clear stored JWT/profile and show login. Same phone may sign up again as a new user.
 
 
 ### Error table (handle in UI)
@@ -200,7 +200,7 @@ No body. **App Store requirement (Apple 5.1.1v):** archive / deactivate the sign
 | `400` | Bad phone/code format; no pending verification | `phone must be E.164 format (e.g. +15551234567)`, `code is required`, `code must be a numeric verification code`, `No pending verification for this phone. Request a new code.` |
 | `401` | Wrong or expired code | `Invalid or expired verification code` |
 | `401` | Missing Bearer on `/app/me` | (auth middleware) |
-| `403` | Suspended/archived user; bad JWT | `Account is not active` |
+| `403` | Suspended user; bad JWT | `Account is not active` |
 | `404` | `dev-login` when `APP_DEV_AUTH` ≠ `true` | route missing |
 | `429` | Resend cooldown (20s) or Twilio send limits | `Please wait before requesting another code` (or Twilio max-attempts message) |
 | `503` | Missing `TWILIO_*` or `APP_JWT_SECRET` on server | dependency / config failure |

@@ -1,5 +1,9 @@
-import { apiGet, apiPost, apiPut, ApiError } from '@/lib/apiClient';
-import type { AppUser, AuthSession } from '@/types/auth';
+import { apiDelete, apiGet, apiPost, apiPut, ApiError } from '@/lib/apiClient';
+import { getItem, removeItem, setItem } from '@/lib/storage';
+import type { AppUser, AuthSession, LoginResult } from '@/types/auth';
+
+/** Phone that just self-deleted on this device — next signup should welcome as new. */
+const DELETED_PHONE_KEY = 'cuub.auth.deletedPhone';
 
 type OtpRequestData = {
   phone: string;
@@ -10,6 +14,7 @@ type OtpRequestData = {
 type LoginResponse = {
   token: string;
   user: AppUser;
+  isNewUser?: boolean;
 };
 
 const E164_RE = /^\+[1-9]\d{6,14}$/;
@@ -53,7 +58,7 @@ export function assertValidPhone(phone: string): string {
   return normalized;
 }
 
-function toSession(data: LoginResponse): AuthSession {
+function toLoginResult(data: LoginResponse): LoginResult {
   if (!data?.token || !data.user?.userId) {
     throw new Error('Login response was incomplete.');
   }
@@ -64,6 +69,7 @@ function toSession(data: LoginResponse): AuthSession {
       phone: data.user.phone,
       notifsEnabled: Boolean(data.user.notifsEnabled),
     },
+    isNewUser: Boolean(data.isNewUser),
   };
 }
 
@@ -84,7 +90,7 @@ export async function requestSmsCode(phone: string): Promise<OtpRequestData> {
 export async function verifySmsCode(
   phone: string,
   code: string,
-): Promise<AuthSession> {
+): Promise<LoginResult> {
   const normalized = assertValidPhone(phone);
   const trimmedCode = code.replace(/\D/g, '').trim();
   if (!/^\d{4,10}$/.test(trimmedCode)) {
@@ -95,7 +101,7 @@ export async function verifySmsCode(
     phone: normalized,
     code: trimmedCode,
   });
-  return toSession(data);
+  return toLoginResult(data);
 }
 
 /** Authoritative session check — use on hydrate and after resume. */
@@ -112,11 +118,45 @@ export async function fetchCurrentUser(token: string): Promise<AppUser> {
 }
 
 /**
- * Archive (delete) the signed-in app user — Apple 5.1.1v.
- * POST /app/me/archive with Bearer JWT only; never call /app-users/:id/status.
+ * Hard-delete the signed-in app user — Apple 5.1.1v.
+ * DELETE /app/me with Bearer JWT only; never call /app-users/:id/status.
  */
 export async function deleteAccount(token: string): Promise<void> {
-  await apiPost<unknown>('/app/me/archive', undefined, { token });
+  await apiDelete<unknown>('/app/me', { token });
+}
+
+/** Remember which phone was deleted so the next OTP signup shows “Welcome to CUUB”. */
+export async function markPhoneDeleted(phone: string): Promise<void> {
+  try {
+    await setItem(DELETED_PHONE_KEY, assertValidPhone(phone));
+  } catch {
+    // Non-fatal — welcome still uses API isNewUser when present.
+  }
+}
+
+/**
+ * True when this phone should get a first-time welcome:
+ * API says new user, or this device just deleted that account.
+ */
+export async function shouldShowNewUserWelcome(
+  phone: string,
+  isNewUser: boolean,
+): Promise<boolean> {
+  if (isNewUser) {
+    await removeItem(DELETED_PHONE_KEY);
+    return true;
+  }
+  try {
+    const deleted = await getItem(DELETED_PHONE_KEY);
+    const normalized = assertValidPhone(phone);
+    if (deleted && deleted === normalized) {
+      await removeItem(DELETED_PHONE_KEY);
+      return true;
+    }
+  } catch {
+    // fall through
+  }
+  return false;
 }
 
 /** Store Expo push token for future remote notifications. */
@@ -151,3 +191,5 @@ export function authErrorMessage(error: unknown, fallback: string): string {
 /** Must match Twilio Verify service code length. */
 export const OTP_LENGTH = 4;
 export const OTP_RESEND_COOLDOWN_SEC = 20;
+
+export type { AuthSession };

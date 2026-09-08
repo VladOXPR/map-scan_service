@@ -8,11 +8,14 @@ export type CameraFitRequest = {
   token: number;
   from: Coordinates | null;
   to: Coordinates;
+  preserveZoom?: boolean;
 };
 
 type StationMapProps = {
   stations: Station[];
   userCoords: Coordinates | null;
+  showUserLocation?: boolean;
+  introEnabled?: boolean;
   selectedStationId?: string | null;
   onSelectStation: (station: Station) => void;
   onDeselect?: () => void;

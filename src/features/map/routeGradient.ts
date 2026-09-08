@@ -44,10 +44,22 @@ function colorAt(t: number): string {
  */
 export function lineStringToGradientSegments(
   feature: GeoJSON.Feature<GeoJSON.LineString>,
-): GeoJSON.FeatureCollection<GeoJSON.LineString> {
-  const coords = feature.geometry.coordinates as LngLat[];
+): GeoJSON.FeatureCollection<GeoJSON.LineString> | null {
+  const raw = feature.geometry?.coordinates ?? [];
+  const coords: LngLat[] = [];
+  for (const c of raw) {
+    if (
+      Array.isArray(c) &&
+      typeof c[0] === 'number' &&
+      typeof c[1] === 'number' &&
+      Number.isFinite(c[0]) &&
+      Number.isFinite(c[1])
+    ) {
+      coords.push([c[0], c[1]]);
+    }
+  }
   if (coords.length < 2) {
-    return { type: 'FeatureCollection', features: [] };
+    return null;
   }
 
   const dists = [0];

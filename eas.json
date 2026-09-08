@@ -19,6 +19,9 @@
       "ios": {
         "simulator": false
       },
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_CUUB_API_URL": "https://platform.cuub.tech"
       }
@@ -38,6 +41,7 @@
     "production": {
       "ios": {
         "appleId": "vlad.valchkou@cuub.tech",
+        "ascAppId": "6805257335",
         "appleTeamId": "8X4H3BPTXL"
       }
     }

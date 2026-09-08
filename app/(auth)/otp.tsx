@@ -12,15 +12,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { OtpInput, Text } from '@/components/ui';
 import {
   OTP_LENGTH,
-  OTP_RESEND_COOLDOWN_SEC,
   authErrorMessage,
-  requestSmsCode,
+  shouldShowNewUserWelcome,
   verifySmsCode,
 } from '@/features/auth/api';
-import { useLocationPermission } from '@/features/location/hooks';
 import { ApiError } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/authStore';
-import { colors, spacing } from '@/theme';
+import { useWelcomeStore } from '@/store/welcomeStore';
+import { spacing } from '@/theme';
+
+const DIDNT_GET_CODE_DELAY_SEC = 10;
 
 export default function OtpScreen() {
   const router = useRouter();
@@ -31,22 +32,21 @@ export default function OtpScreen() {
     [params.phone],
   );
   const setSession = useAuthStore((s) => s.setSession);
-  const { prompted, requestPermission } = useLocationPermission();
+  const armWelcome = useWelcomeStore((s) => s.arm);
 
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
-  const [resending, setResending] = useState(false);
-  const [cooldown, setCooldown] = useState(OTP_RESEND_COOLDOWN_SEC);
+  const [showDidntGetCode, setShowDidntGetCode] = useState(false);
   const verifyingRef = useRef(false);
 
   useEffect(() => {
-    if (cooldown <= 0) return;
-    const id = setInterval(() => {
-      setCooldown((s) => (s <= 1 ? 0 : s - 1));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [cooldown]);
+    const id = setTimeout(
+      () => setShowDidntGetCode(true),
+      DIDNT_GET_CODE_DELAY_SEC * 1000,
+    );
+    return () => clearTimeout(id);
+  }, []);
 
   const onVerify = async (nextCode: string = code) => {
     if (verifyingRef.current) return;
@@ -55,7 +55,7 @@ export default function OtpScreen() {
       return;
     }
     if (!phone) {
-      setError('Missing phone number. Go back and try again.');
+      setError('Missing phone number. Try again.');
       return;
     }
 
@@ -63,12 +63,12 @@ export default function OtpScreen() {
     setLoading(true);
     setError(undefined);
     try {
-      const session = await verifySmsCode(phone, nextCode);
-      await setSession(session);
-      // System location prompt once after account/sign-in — no dedicated screen.
-      if (!prompted) {
-        await requestPermission();
-      }
+      const result = await verifySmsCode(phone, nextCode);
+      await setSession({ token: result.token, user: result.user });
+      // New signup / re-register after delete → "Welcome to CUUB".
+      // Existing returning account → "Welcome back".
+      const showNew = await shouldShowNewUserWelcome(phone, result.isNewUser);
+      armWelcome(showNew ? 'new' : 'back');
       router.replace('/(app)');
     } catch (err) {
       setError(authErrorMessage(err, 'Verification failed'));
@@ -97,36 +97,21 @@ export default function OtpScreen() {
     }
   };
 
-  const onResend = async () => {
-    if (cooldown > 0 || resending || !phone) return;
-    setResending(true);
-    setError(undefined);
-    try {
-      await requestSmsCode(phone);
-      setCode('');
-      setCooldown(OTP_RESEND_COOLDOWN_SEC);
-    } catch (err) {
-      setError(authErrorMessage(err, 'Couldn’t resend code'));
-      if (err instanceof ApiError && err.status === 429) {
-        setCooldown(OTP_RESEND_COOLDOWN_SEC);
-      }
-    } finally {
-      setResending(false);
-    }
+  const onSendAnother = () => {
+    router.replace('/(auth)/phone');
   };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Go back"
-        onPress={() => router.back()}
-        hitSlop={12}
-        style={styles.backBtn}
+        accessibilityLabel="Close"
+        onPress={() => router.replace('/(app)')}
+        style={[styles.closeButton, { top: insets.top + spacing[2] }]}
+        hitSlop={8}
       >
-        <Text style={styles.backLabel}>← Back</Text>
+        <Text style={styles.closeIcon}>×</Text>
       </Pressable>
-
       <KeyboardAvoidingView
         style={styles.body}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -141,27 +126,18 @@ export default function OtpScreen() {
 
           {loading ? (
             <ActivityIndicator color="#BBBBBB" style={styles.spinner} />
-          ) : (
+          ) : showDidntGetCode ? (
             <Pressable
-              disabled={cooldown > 0 || resending}
-              onPress={() => {
-                void onResend();
-              }}
-              style={styles.resend}
+              accessibilityRole="button"
+              accessibilityLabel="Send another verification code"
+              onPress={onSendAnother}
+              style={styles.didntGetCode}
             >
-              <Text
-                variant="subtitle"
-                color={cooldown > 0 || resending ? '#666666' : '#BBBBBB'}
-                center
-              >
-                {resending
-                  ? 'Sending…'
-                  : cooldown > 0
-                    ? `Resend code in ${cooldown}s`
-                    : 'Resend code'}
+              <Text variant="subtitle" color="#BBBBBB" center>
+                Didn&apos;t get code? Send another one
               </Text>
             </Pressable>
-          )}
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -173,15 +149,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
-  backBtn: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing[5],
-    paddingVertical: spacing[3],
+  closeButton: {
+    position: 'absolute',
+    left: spacing[5],
+    zIndex: 2,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#161616',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  backLabel: {
-    color: colors.white,
-    fontSize: 17,
-    fontWeight: '600',
+  closeIcon: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    lineHeight: 30,
+    fontWeight: '400',
+    marginTop: -1,
   },
   body: {
     flex: 1,
@@ -194,7 +180,7 @@ const styles = StyleSheet.create({
     gap: spacing[6],
     marginBottom: spacing[9],
   },
-  resend: {
+  didntGetCode: {
     paddingVertical: spacing[2],
   },
   spinner: {

@@ -6,7 +6,7 @@ Battery-sharing mobile app built with Expo, Expo Router, TypeScript, Mapbox, Nat
 
 Help a user find and rent a battery in under 30 seconds. The map is the core experience.
 
-**v1.0 App Store scope:** SMS login + find nearby stations on the map. Rent / return / payment ship later.
+**v1.0 App Store scope:** find nearby stations on the map. SMS login is implemented but parked until rent / pay.
 
 ## Setup
 
@@ -46,18 +46,20 @@ npm run typecheck
 
 ## Auth
 
-Phone login uses live SMS OTP against the platform API:
+Phone OTP is implemented in `app/(auth)/` and is **optional**. The map does not require an account. Profile → Log in opens the phone flow; close returns to the map.
+
+When re-enabled:
 
 1. Enter a phone number (US 10-digit → `+1…`)
 2. `POST /app/auth/request-otp` sends a Twilio Verify code (**4 digits** — must match Twilio Verify service settings)
 3. `POST /app/auth/verify-otp` returns a JWT session stored in SecureStore
 4. On launch, `GET /app/me` revalidates; 401/403 clears the session
 
-Account → **Delete account** calls `POST /app/me/archive` with the app-user JWT, then clears the session (see [docs/API.md](docs/API.md)).
+Account → **Delete account** (only if a leftover session exists) calls `DELETE /app/me` with the app-user JWT, then clears the session (see [docs/API.md](docs/API.md)).
 
 ## App flow
 
-Splash → Location permission (once) → Phone → OTP → Home map
+Splash → Home map → location explainer (Continue → system prompt)
 
 Tap a station pin for the bottom sheet. Primary action opens Apple Maps directions.
 

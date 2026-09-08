@@ -98,5 +98,9 @@ export function apiDelete<T>(
 }
 
 export function isAuthFailure(error: unknown): boolean {
-  return error instanceof ApiError && (error.status === 401 || error.status === 403);
+  // 404: hard-deleted account — old JWT can no longer resolve /app/me
+  return (
+    error instanceof ApiError &&
+    (error.status === 401 || error.status === 403 || error.status === 404)
+  );
 }

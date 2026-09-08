@@ -54,7 +54,8 @@ export const map = {
   styleURL: 'mapbox://styles/mapbox/dark-v11',
   defaultCenter: { latitude: 41.9295, longitude: -87.65 },
   defaultZoom: 13.5,
-  defaultPitch: 45,
+  /** Camera tilt in degrees — only pitch value used anywhere in the app. */
+  tilt: 53,
   stationZoom: 15,
   brandBlue: '#0198FD',
 } as const;

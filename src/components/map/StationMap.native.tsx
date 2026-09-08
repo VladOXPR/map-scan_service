@@ -23,6 +23,9 @@ import { MAP_BRAND_BLUE, STATION_ICONS } from './stationIcons';
 import { StationMarker } from './StationMarker';
 import { Text } from '@/components/ui';
 
+/** Single source for map tilt — always `mapTokens.tilt` (53°). */
+const tilt = mapTokens.tilt;
+
 /** RN hit-targets only when zoomed in — so cluster taps can expand first. */
 const HIT_TARGET_MIN_ZOOM = 14.5;
 export type CameraFitRequest = {
@@ -32,11 +35,23 @@ export type CameraFitRequest = {
   from: Coordinates | null;
   /** Shown on the right (station). */
   to: Coordinates;
+  /**
+   * Pan only — keep current zoom/heading/pitch.
+   * Used when tapping a non-nearest station pin.
+   */
+  preserveZoom?: boolean;
 };
 
 type StationMapProps = {
   stations: Station[];
   userCoords: Coordinates | null;
+  /** Show the Mapbox puck once iOS location is granted (even before coords resolve). */
+  showUserLocation?: boolean;
+  /**
+   * When false (e.g. welcome overlay), hold the home intro.
+   * Flipping to true starts the user → network zoom.
+   */
+  introEnabled?: boolean;
   selectedStationId?: string | null;
   onSelectStation: (station: Station) => void;
   onDeselect?: () => void;
@@ -45,6 +60,155 @@ type StationMapProps = {
   /** Fit camera with user left / station right (Nearest CUUB). */
   cameraFit?: CameraFitRequest | null;
 };
+
+const PUCK_FILL = '#1F69E1';
+const PITCH_MAP = { circlePitchAlignment: 'map' as const };
+const PULSE_BEAT_MS = 1800;
+const PULSE_CORE = 11;
+const PULSE_SPREAD = 22;
+const NO_TRANS = { duration: 0, delay: 0 };
+
+function MapAlignedUserPuck({
+  coordinate,
+}: {
+  coordinate: [number, number];
+}) {
+  const [pulse, setPulse] = useState({ beat: 0, t: 0 });
+
+  useEffect(() => {
+    const started = Date.now();
+    const id = setInterval(() => {
+      const elapsed = Date.now() - started;
+      setPulse({
+        beat: Math.floor(elapsed / PULSE_BEAT_MS),
+        t: (elapsed % PULSE_BEAT_MS) / PULSE_BEAT_MS,
+      });
+    }, 50);
+    return () => clearInterval(id);
+  }, []);
+
+  const pulseStyle = (layerBeat: 0 | 1) => {
+    const active = pulse.beat % 2 === layerBeat;
+    if (!active) {
+      return {
+        ...PITCH_MAP,
+        circleRadius: PULSE_CORE + PULSE_SPREAD,
+        circleColor: PUCK_FILL,
+        circleOpacity: 0,
+        circleRadiusTransition: NO_TRANS,
+        circleOpacityTransition: NO_TRANS,
+      };
+    }
+
+    const t = pulse.t;
+    const snap = t < 0.06;
+    return {
+      ...PITCH_MAP,
+      circleRadius: PULSE_CORE + t * PULSE_SPREAD,
+      circleColor: PUCK_FILL,
+      circleOpacity: 0.42 * (1 - t),
+      circleRadiusTransition: snap ? NO_TRANS : { duration: 80, delay: 0 },
+      circleOpacityTransition: snap ? NO_TRANS : { duration: 80, delay: 0 },
+    };
+  };
+
+  const lng = coordinate[0];
+  const lat = coordinate[1];
+  const shape = useMemo<GeoJSON.FeatureCollection<GeoJSON.Point>>(() => {
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+      return { type: 'FeatureCollection', features: [] };
+    }
+    return {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'Point', coordinates: [lng, lat] },
+        },
+      ],
+    };
+  }, [lng, lat]);
+
+  if (shape.features.length === 0) return null;
+
+  // Insert under stations via belowLayerID — avoids aboveLayerID races when
+  // the route mounts/unmounts.
+  return (
+    <ShapeSource id="cuub-user-puck" shape={shape}>
+      <CircleLayer
+        id="cuubPuckPulseA"
+        belowLayerID="clusters"
+        style={pulseStyle(0)}
+      />
+      <CircleLayer
+        id="cuubPuckPulseB"
+        aboveLayerID="cuubPuckPulseA"
+        style={pulseStyle(1)}
+      />
+      <CircleLayer
+        id="cuubPuckCore"
+        aboveLayerID="cuubPuckPulseB"
+        style={{
+          ...PITCH_MAP,
+          circleRadius: 11,
+          circleColor: '#000000',
+          circleStrokeColor: '#FFFFFF',
+          circleStrokeWidth: 3,
+        }}
+      />
+    </ShapeSource>
+  );
+}
+
+function boundsForUserAndNetwork(
+  userCoords: Coordinates | null,
+  stations: Station[],
+): { ne: [number, number]; sw: [number, number] } | null {
+  if (!userCoords && !stations.length) return null;
+
+  let minLat = userCoords?.latitude ?? stations[0]!.latitude;
+  let maxLat = minLat;
+  let minLng = userCoords?.longitude ?? stations[0]!.longitude;
+  let maxLng = minLng;
+
+  if (userCoords) {
+    minLat = maxLat = userCoords.latitude;
+    minLng = maxLng = userCoords.longitude;
+  }
+
+  for (const station of stations) {
+    minLat = Math.min(minLat, station.latitude);
+    maxLat = Math.max(maxLat, station.latitude);
+    minLng = Math.min(minLng, station.longitude);
+    maxLng = Math.max(maxLng, station.longitude);
+  }
+
+  const pad = 0.002;
+  if (maxLat - minLat < pad) {
+    minLat -= pad / 2;
+    maxLat += pad / 2;
+  }
+  if (maxLng - minLng < pad) {
+    minLng -= pad / 2;
+    maxLng += pad / 2;
+  }
+
+  return {
+    ne: [maxLng, maxLat],
+    sw: [minLng, minLat],
+  };
+}
+
+function networkOverviewPadding(insetTop: number) {
+  const { width: screenW, height: screenH } = Dimensions.get('window');
+  return {
+    paddingTop: Math.max(insetTop, 12) + 72,
+    paddingBottom: Math.max(Math.round(screenH * 0.22), 120),
+    paddingLeft: Math.max(Math.round(screenW * 0.08), 40),
+    paddingRight: Math.max(Math.round(screenW * 0.08), 40),
+  };
+}
 
 const FALLBACK_CENTER: Coordinates = {
   latitude: mapTokens.defaultCenter.latitude,
@@ -113,6 +277,8 @@ function zoomForHorizontalSpan(
 export function StationMap({
   stations,
   userCoords,
+  showUserLocation = false,
+  introEnabled = true,
   selectedStationId,
   onSelectStation,
   onDeselect,
@@ -126,11 +292,19 @@ export function StationMap({
   const hitTargetsEnabledRef = useRef(false);
   /** One-shot home intro: user-centered → network overview. */
   const introPlayedRef = useRef(false);
+  /** True after the initial center-on-user frame (zoom-out may still be pending). */
+  const introCenteredRef = useRef(false);
+  /** Live camera — used so locate/pan stops don't let Mapbox invent zoom/heading/pitch. */
+  const liveCameraRef = useRef({
+    zoom: mapTokens.defaultZoom,
+    heading: 0,
+  });
   const insets = useSafeAreaInsets();
   const tokenStatus = getMapboxTokenStatus();
   const [routeLine, setRouteLine] =
     useState<GeoJSON.Feature<GeoJSON.LineString> | null>(null);
   const [hitTargetsEnabled, setHitTargetsEnabled] = useState(false);
+  const [livePuck, setLivePuck] = useState<[number, number] | null>(null);
 
   const routeGradient = useMemo(
     () => (routeLine ? lineStringToGradientSegments(routeLine) : null),
@@ -145,6 +319,12 @@ export function StationMap({
   useEffect(() => {
     configureMapbox();
   }, []);
+
+  useEffect(() => {
+    if (!selectedStationId) return;
+    introPlayedRef.current = true;
+    introCenteredRef.current = true;
+  }, [selectedStationId]);
 
   useEffect(() => {
     if (!cameraFit?.from) {
@@ -170,6 +350,9 @@ export function StationMap({
   useEffect(() => {
     if (!cameraFit) return;
 
+    introPlayedRef.current = true;
+    introCenteredRef.current = true;
+
     const station = cameraFit.to;
     const user = cameraFit.from;
     const { width: screenW, height: screenH } = Dimensions.get('window');
@@ -184,12 +367,27 @@ export function StationMap({
       paddingRight: paddingX,
     };
 
-    if (!user) {
+    // Pin tap (non-nearest): pan only so the station sits above the sheet.
+    if (cameraFit.preserveZoom || !user) {
+      if (cameraFit.preserveZoom) {
+        const { zoom, heading } = liveCameraRef.current;
+        cameraRef.current?.setCamera({
+          centerCoordinate: [station.longitude, station.latitude],
+          zoomLevel: zoom,
+          heading,
+          pitch: tilt,
+          padding,
+          animationDuration: 650,
+          animationMode: 'easeTo',
+        });
+        return;
+      }
+
       cameraRef.current?.setCamera({
         centerCoordinate: [station.longitude, station.latitude],
         zoomLevel: mapTokens.stationZoom,
         heading: 0,
-        pitch: mapTokens.defaultPitch,
+        pitch: tilt,
         padding,
         animationDuration: 650,
         animationMode: 'flyTo',
@@ -213,7 +411,7 @@ export function StationMap({
       centerCoordinate: [mid.longitude, mid.latitude],
       zoomLevel: zoom,
       heading,
-      pitch: mapTokens.defaultPitch,
+      pitch: tilt,
       padding,
       animationDuration: 650,
       animationMode: 'flyTo',
@@ -221,72 +419,69 @@ export function StationMap({
   }, [cameraFit, insets.top]);
 
   useEffect(() => {
-    if (!cameraTarget || cameraFit) return;
+    if (!cameraTarget) return;
+    // Locate: pan to puck only — keep zoom/heading, always `tilt`.
+    const { zoom, heading } = liveCameraRef.current;
     cameraRef.current?.setCamera({
       centerCoordinate: [cameraTarget.longitude, cameraTarget.latitude],
-      zoomLevel: cameraZoom ?? mapTokens.stationZoom,
+      zoomLevel: cameraZoom ?? zoom,
+      heading,
+      pitch: tilt,
+      padding: {
+        paddingTop: 0,
+        paddingBottom: 0,
+        paddingLeft: 0,
+        paddingRight: 0,
+      },
       animationDuration: 650,
-      animationMode: 'flyTo',
+      animationMode: 'easeTo',
     });
-  }, [cameraTarget, cameraZoom, cameraFit]);
+  }, [cameraTarget, cameraZoom]);
+
+  // Hold/reset intro while welcome (or similar) covers the map.
+  useEffect(() => {
+    if (!introEnabled) {
+      introPlayedRef.current = false;
+      introCenteredRef.current = false;
+    }
+  }, [introEnabled]);
 
   /**
    * Home load: frame the puck first, then after 1s fly out so the user +
    * whole station network fit the viewport.
+   * Waits for `introEnabled` so login welcome doesn't hide the animation.
+   * Zoom-out is only marked complete when it fires — so a stations refetch
+   * mid-timer can reschedule instead of skipping the fly-out forever.
    */
   useEffect(() => {
+    if (!introEnabled) return;
     if (introPlayedRef.current) return;
     if (!userCoords || !stations.length) return;
     if (cameraFit) return;
 
-    introPlayedRef.current = true;
+    const padding = networkOverviewPadding(insets.top);
 
-    cameraRef.current?.setCamera({
-      centerCoordinate: [userCoords.longitude, userCoords.latitude],
-      zoomLevel: mapTokens.stationZoom,
-      pitch: mapTokens.defaultPitch,
-      heading: 0,
-      animationDuration: 0,
-      animationMode: 'moveTo',
-    });
-
-    const { width: screenW, height: screenH } = Dimensions.get('window');
-    const padding = {
-      paddingTop: Math.max(insets.top, 12) + 72,
-      paddingBottom: Math.max(Math.round(screenH * 0.22), 120),
-      paddingLeft: Math.max(Math.round(screenW * 0.08), 40),
-      paddingRight: Math.max(Math.round(screenW * 0.08), 40),
-    };
+    if (!introCenteredRef.current) {
+      introCenteredRef.current = true;
+      cameraRef.current?.setCamera({
+        centerCoordinate: [userCoords.longitude, userCoords.latitude],
+        zoomLevel: mapTokens.stationZoom,
+        pitch: tilt,
+        heading: 0,
+        animationDuration: 0,
+        animationMode: 'moveTo',
+      });
+    }
 
     const timer = setTimeout(() => {
-      let minLat = userCoords.latitude;
-      let maxLat = userCoords.latitude;
-      let minLng = userCoords.longitude;
-      let maxLng = userCoords.longitude;
-      for (const station of stations) {
-        minLat = Math.min(minLat, station.latitude);
-        maxLat = Math.max(maxLat, station.latitude);
-        minLng = Math.min(minLng, station.longitude);
-        maxLng = Math.max(maxLng, station.longitude);
-      }
-      // Keep fitBounds stable when everything collapses to one point.
-      const pad = 0.002;
-      if (maxLat - minLat < pad) {
-        minLat -= pad / 2;
-        maxLat += pad / 2;
-      }
-      if (maxLng - minLng < pad) {
-        minLng -= pad / 2;
-        maxLng += pad / 2;
-      }
+      const bounds = boundsForUserAndNetwork(userCoords, stations);
+      if (!bounds) return;
 
+      introPlayedRef.current = true;
       cameraRef.current?.setCamera({
-        bounds: {
-          ne: [maxLng, maxLat],
-          sw: [minLng, minLat],
-        },
+        bounds,
         padding,
-        pitch: mapTokens.defaultPitch,
+        pitch: tilt,
         heading: 0,
         animationDuration: 1400,
         animationMode: 'flyTo',
@@ -294,7 +489,7 @@ export function StationMap({
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [userCoords, stations, cameraFit, insets.top]);
+  }, [introEnabled, userCoords, stations, cameraFit, insets.top]);
 
   const defaultCenter = useMemo(() => {
     const c = userCoords ?? FALLBACK_CENTER;
@@ -337,6 +532,7 @@ export function StationMap({
         cameraRef.current?.setCamera({
           centerCoordinate: [coords[0], coords[1]],
           zoomLevel: zoom,
+          pitch: tilt,
           animationDuration: 400,
           animationMode: 'easeTo',
         });
@@ -385,6 +581,10 @@ export function StationMap({
   }, [onDeselect]);
 
   const onCameraChanged = useCallback((state: MapState) => {
+    liveCameraRef.current = {
+      zoom: state.properties.zoom,
+      heading: state.properties.heading,
+    };
     const enabled = state.properties.zoom >= HIT_TARGET_MIN_ZOOM;
     if (enabled === hitTargetsEnabledRef.current) return;
     hitTargetsEnabledRef.current = enabled;
@@ -456,28 +656,31 @@ export function StationMap({
           zoomLevel: userCoords
             ? mapTokens.stationZoom
             : mapTokens.defaultZoom,
-          pitch: mapTokens.defaultPitch,
+          pitch: tilt,
           heading: 0,
         }}
       />
 
       <Images images={STATION_ICONS} />
 
-      {routeLine && routeGradient ? (
-        <ShapeSource id="nearest-route" shape={routeGradient}>
-          <LineLayer
-            id="nearest-route-line"
-            belowLayerID="clusters"
-            style={{
-              lineCap: 'round',
-              lineJoin: 'round',
-              lineWidth: 9,
-              lineColor: ['get', 'color'],
-            }}
-          />
-        </ShapeSource>
+      {showUserLocation ? (
+        <UserLocation
+          visible={false}
+          animated
+          onUpdate={(location) => {
+            setLivePuck([
+              location.coords.longitude,
+              location.coords.latitude,
+            ]);
+          }}
+        />
       ) : null}
 
+      {/*
+        Stations first (stable anchor). Then puck below clusters. Then route
+        below puck. Final stack: path → puck → stations/clusters.
+        Nearest pin uses the same unclustered-point layer as every other pin.
+      */}
       <ShapeSource
         ref={shapeRef}
         id="stations"
@@ -525,10 +728,10 @@ export function StationMap({
           filter={[
             'all',
             ['!', ['has', 'point_count']],
-            ['!', ['get', 'dimmed']],
+            ['==', ['get', 'dimmed'], 0],
           ]}
           style={{
-            circleRadius: ['case', ['get', 'selected'], 14, 12],
+            circleRadius: ['case', ['==', ['get', 'selected'], 1], 14, 12],
             circleColor: '#ffffff',
             circleOpacity: 1,
             circleStrokeWidth: 2,
@@ -563,8 +766,8 @@ export function StationMap({
               'station-icon-6',
               'station-icon-6',
             ],
-            iconSize: ['case', ['get', 'selected'], 1.2, 1],
-            iconOpacity: ['case', ['get', 'dimmed'], 0.5, 1],
+            iconSize: ['case', ['==', ['get', 'selected'], 1], 1.2, 1],
+            iconOpacity: ['case', ['==', ['get', 'dimmed'], 1], 0.5, 1],
             iconAllowOverlap: true,
             iconIgnorePlacement: true,
             iconAnchor: 'center',
@@ -572,23 +775,35 @@ export function StationMap({
         />
       </ShapeSource>
 
-      {/* RN press targets — same touch path as the Nearest button (not Mapbox hit-test). */}
-      {stationHitTargets}
+      {showUserLocation && (livePuck || userCoords) ? (
+        <MapAlignedUserPuck
+          coordinate={
+            livePuck ?? [userCoords!.longitude, userCoords!.latitude]
+          }
+        />
+      ) : null}
 
-      {userCoords ? (
-        <UserLocation visible>
-          <CircleLayer
-            id="cuubUserLocationPuck"
+      {routeLine && routeGradient ? (
+        <ShapeSource id="nearest-route" shape={routeGradient}>
+          <LineLayer
+            id="nearest-route-line"
+            belowLayerID={
+              showUserLocation && (livePuck || userCoords)
+                ? 'cuubPuckPulseA'
+                : 'clusters'
+            }
             style={{
-              circleRadius: 7,
-              circleColor: '#000000',
-              circleStrokeColor: '#FFFFFF',
-              circleStrokeWidth: 3,
-              circlePitchAlignment: 'map',
+              lineCap: 'round',
+              lineJoin: 'round',
+              lineWidth: 9,
+              lineColor: ['get', 'color'],
             }}
           />
-        </UserLocation>
+        </ShapeSource>
       ) : null}
+
+      {/* RN press targets — same touch path as the Nearest button (not Mapbox hit-test). */}
+      {stationHitTargets}
     </MapView>
   );
 }

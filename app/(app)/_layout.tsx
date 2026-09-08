@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Redirect, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import { registerLowBatteryBackgroundTask } from '@/features/alerts/backgroundLowBatteryTask';
 import { syncExpoPushToken } from '@/features/alerts/registerExpoPushToken';
 import { useLowBatteryAlerts } from '@/features/alerts/useLowBatteryAlerts';
@@ -23,10 +23,6 @@ export default function AppLayout() {
 
   if (!hydrated) {
     return <LoadingState />;
-  }
-
-  if (!session) {
-    return <Redirect href="/(auth)/phone" />;
   }
 
   return (

@@ -19,8 +19,10 @@ import { colors, radius, spacing } from '@/theme';
 type AccountModalProps = {
   visible: boolean;
   phone: string;
+  signedIn?: boolean;
   deleting?: boolean;
   onClose: () => void;
+  onLogin: () => void;
   onLogout: () => void;
   onDeleteAccount: () => void;
 };
@@ -28,8 +30,10 @@ type AccountModalProps = {
 export function AccountModal({
   visible,
   phone,
+  signedIn = false,
   deleting = false,
   onClose,
+  onLogin,
   onLogout,
   onDeleteAccount,
 }: AccountModalProps) {
@@ -83,10 +87,21 @@ export function AccountModal({
           </Pressable>
 
           <View style={styles.content}>
-            <Text muted style={styles.label}>
-              Your phone number
-            </Text>
-            <Text style={styles.phone}>{phone || '—'}</Text>
+            {signedIn ? (
+              <>
+                <Text muted style={styles.label}>
+                  Your phone number
+                </Text>
+                <Text style={styles.phone}>{phone || '—'}</Text>
+              </>
+            ) : (
+              <>
+                <Text muted style={styles.label}>
+                  Account
+                </Text>
+                <Text style={styles.phone}>Log in with your number</Text>
+              </>
+            )}
           </View>
 
           <View style={styles.actions}>
@@ -113,21 +128,27 @@ export function AccountModal({
                 </Text>
               </Pressable>
             </View>
-            <Button label="Log out" variant="neutral" onPress={onLogout} />
-            <Pressable
-              accessibilityRole="button"
-              disabled={deleting}
-              onPress={confirmDelete}
-              style={[styles.deleteButton, deleting && styles.deleteDisabled]}
-            >
-              {deleting ? (
-                <ActivityIndicator color={colors.danger} />
-              ) : (
-                <Text variant="button" color="rgba(255,69,58,0.55)">
-                  Delete account
-                </Text>
-              )}
-            </Pressable>
+            {signedIn ? (
+              <>
+                <Button label="Log out" variant="neutral" onPress={onLogout} />
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={deleting}
+                  onPress={confirmDelete}
+                  style={[styles.deleteButton, deleting && styles.deleteDisabled]}
+                >
+                  {deleting ? (
+                    <ActivityIndicator color={colors.danger} />
+                  ) : (
+                    <Text variant="button" color="rgba(255,69,58,0.55)">
+                      Delete account
+                    </Text>
+                  )}
+                </Pressable>
+              </>
+            ) : (
+              <Button label="Log in" variant="neutral" onPress={onLogin} />
+            )}
           </View>
         </View>
       </View>

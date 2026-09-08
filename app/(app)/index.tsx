@@ -2,40 +2,60 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, StyleSheet, View } from 'react-native';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StationMap } from '@/components/map/StationMap';
 import type { CameraFitRequest } from '@/components/map/StationMap';
 import { StationBottomSheet } from '@/components/sheets/StationBottomSheet';
 import { AccountModal } from '@/components/overlays/AccountModal';
-import { LocationDeniedBanner } from '@/components/overlays/LocationDeniedBanner';
+import { CreateAccountSheet } from '@/components/overlays/CreateAccountSheet';
+import { LocationPermissionSheet } from '@/components/overlays/LocationPermissionSheet';
+import { MapTopBlur } from '@/components/overlays/MapTopBlur';
+import { WelcomeOverlay } from '@/components/overlays/WelcomeOverlay';
 import {
+  EnableLocationButton,
   FindChargerBar,
   ProfileButton,
   SupportButton,
 } from '@/components/overlays/MapChrome';
 import { EmptyState, LoadingState, Text } from '@/components/ui';
-import { authErrorMessage, deleteAccount } from '@/features/auth/api';
+import {
+  authErrorMessage,
+  deleteAccount,
+  markPhoneDeleted,
+} from '@/features/auth/api';
 import { isAuthFailure } from '@/lib/apiClient';
 import { useNearbyStations } from '@/features/stations/hooks';
 import { useLocationPermission } from '@/features/location/hooks';
 import { getSupportPhoneE164 } from '@/lib/config';
 import { useAuthStore } from '@/store/authStore';
+import { useAccountPromptStore } from '@/store/accountPromptStore';
 import { useMapStore } from '@/store/mapStore';
+import { useWelcomeStore } from '@/store/welcomeStore';
 import { distanceMiles, formatDistance } from '@/lib/distance';
 import type { Coordinates, Station } from '@/types/station';
 import { colors, spacing } from '@/theme';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const sheetRef = useRef<BottomSheet>(null);
+  const didAutoPromptRef = useRef(false);
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
+  const welcomePending = useWelcomeStore((s) => s.pending);
+  const clearWelcome = useWelcomeStore((s) => s.clear);
+  const accountPromptHydrated = useAccountPromptStore((s) => s.hydrated);
+  const accountPromptDismissed = useAccountPromptStore((s) => s.dismissed);
+  const dismissAccountPrompt = useAccountPromptStore((s) => s.dismiss);
   const [accountOpen, setAccountOpen] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [locationSheetOpen, setLocationSheetOpen] = useState(false);
+  const [locationRequesting, setLocationRequesting] = useState(false);
+  const [accountPromptOpen, setAccountPromptOpen] = useState(false);
+  const [welcomeVisible, setWelcomeVisible] = useState(false);
+  const [welcomeVariant, setWelcomeVariant] = useState<'new' | 'back'>('new');
   /** Pin highlight — cleared as soon as the sheet starts closing. */
   const [pinSelectedId, setPinSelectedId] = useState<string | null>(null);
   const [cameraFit, setCameraFit] = useState<CameraFitRequest | null>(null);
+  const [cameraTarget, setCameraTarget] = useState<Coordinates | null>(null);
   const cameraFitToken = useRef(0);
   const {
     data: stations = [],
@@ -46,8 +66,8 @@ export default function HomeScreen() {
   } = useNearbyStations();
   const {
     permission,
-    prompted,
     coords,
+    refreshPermission,
     requestPermission,
     loadCurrentPosition,
   } = useLocationPermission();
@@ -61,19 +81,84 @@ export default function HomeScreen() {
   const sheetOpen = sheetIndex >= 0;
 
   useEffect(() => {
+    if (!welcomePending) return;
+    setWelcomeVariant(welcomePending);
+    setWelcomeVisible(true);
+    clearWelcome();
+  }, [welcomePending, clearWelcome]);
+
+  const onWelcomeFinished = useCallback(() => {
+    setWelcomeVisible(false);
+  }, []);
+
+  const openLocationSheet = useCallback(async () => {
+    const { status } = await refreshPermission();
+    if (status === 'granted') {
+      await loadCurrentPosition();
+      setLocationSheetOpen(false);
+      return;
+    }
+    setLocationSheetOpen(true);
+  }, [loadCurrentPosition, refreshPermission]);
+
+  useEffect(() => {
     let cancelled = false;
     void (async () => {
-      // Returning sessions that never saw the post-signup system prompt.
-      if (!prompted) {
-        await requestPermission();
-        if (cancelled) return;
+      const { status } = await refreshPermission();
+      if (cancelled) return;
+      if (status === 'granted') {
+        await loadCurrentPosition();
+        return;
       }
-      await loadCurrentPosition();
+      // First map visit: in-app sheet only while iOS can still show its dialog.
+      // Wait until welcome overlay finishes so it isn't covered.
+      if (
+        !didAutoPromptRef.current &&
+        status === 'undetermined' &&
+        !welcomeVisible &&
+        !welcomePending
+      ) {
+        didAutoPromptRef.current = true;
+        setLocationSheetOpen(true);
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [prompted, requestPermission, loadCurrentPosition]);
+  }, [refreshPermission, loadCurrentPosition, welcomeVisible, welcomePending]);
+
+  // Optional account prompt after location is settled — never blocks the map.
+  useEffect(() => {
+    if (!accountPromptHydrated) return;
+    if (session) return;
+    if (accountPromptDismissed) return;
+    if (welcomeVisible || welcomePending) return;
+    if (locationSheetOpen || locationRequesting) return;
+    // Let the required location Continue sheet go first on a fresh install.
+    if (permission === 'undetermined') return;
+    setAccountPromptOpen(true);
+  }, [
+    accountPromptHydrated,
+    accountPromptDismissed,
+    session,
+    welcomeVisible,
+    welcomePending,
+    locationSheetOpen,
+    locationRequesting,
+    permission,
+  ]);
+
+  const nearestStation = useMemo(() => {
+    const candidates = stations.filter(
+      (s) => s.locationInactive !== true && s.online !== false,
+    );
+    if (!candidates.length) return null;
+    if (!coords) return candidates[0];
+    return [...candidates].sort(
+      (a, b) =>
+        distanceMiles(coords, a) - distanceMiles(coords, b),
+    )[0];
+  }, [coords, stations]);
 
   /**
    * Shared open path for map taps + Nearest.
@@ -88,14 +173,41 @@ export default function HomeScreen() {
       sheetRef.current?.snapToIndex(0);
       selectStation(station);
       setPinSelectedId(station.id);
+      // Don't let a prior locate-button recenter re-fire when the sheet closes.
+      setCameraTarget(null);
 
       if (options && 'cameraFit' in options) {
         setCameraFit(options.cameraFit ?? null);
-      } else {
-        setCameraFit((prev) => (prev == null ? prev : null));
+        return;
       }
+
+      cameraFitToken.current += 1;
+
+      // Same framing as the Nearest location button.
+      if (nearestStation && station.id === nearestStation.id) {
+        setCameraFit({
+          token: cameraFitToken.current,
+          from: coords,
+          to: {
+            latitude: station.latitude,
+            longitude: station.longitude,
+          },
+        });
+        return;
+      }
+
+      // Other pins: pan only — keep zoom, center above the sheet.
+      setCameraFit({
+        token: cameraFitToken.current,
+        from: null,
+        to: {
+          latitude: station.latitude,
+          longitude: station.longitude,
+        },
+        preserveZoom: true,
+      });
     },
-    [selectStation],
+    [coords, nearestStation, selectStation],
   );
 
   const onDeselect = useCallback(() => {
@@ -129,18 +241,6 @@ export default function HomeScreen() {
     [clearSelection, setSheetIndex],
   );
 
-  const nearestStation = useMemo(() => {
-    const candidates = stations.filter(
-      (s) => s.locationInactive !== true && s.online !== false,
-    );
-    if (!candidates.length) return null;
-    if (!coords) return candidates[0];
-    return [...candidates].sort(
-      (a, b) =>
-        distanceMiles(coords, a) - distanceMiles(coords, b),
-    )[0];
-  }, [coords, stations]);
-
   const nearestDistanceLabel = useMemo(() => {
     if (!nearestStation || !coords) return null;
     const miles = distanceMiles(coords, {
@@ -167,6 +267,32 @@ export default function HomeScreen() {
     });
   };
 
+  const onLocatePress = () => {
+    if (permission !== 'granted') {
+      void openLocationSheet();
+      return;
+    }
+    void (async () => {
+      const next = await loadCurrentPosition();
+      if (!next) return;
+      setCameraFit(null);
+      setCameraTarget({
+        latitude: next.latitude,
+        longitude: next.longitude,
+      });
+    })();
+  };
+
+  const onContinueLocation = async () => {
+    setLocationRequesting(true);
+    try {
+      await requestPermission();
+      setLocationSheetOpen(false);
+    } finally {
+      setLocationRequesting(false);
+    }
+  };
+
   const onSupport = () => {
     const phone = getSupportPhoneE164();
     void Linking.openURL(
@@ -176,14 +302,30 @@ export default function HomeScreen() {
     );
   };
 
+  const onLogin = () => {
+    setAccountOpen(false);
+    router.push('/(auth)/phone');
+  };
+
+  const onAccountPromptCreate = () => {
+    setAccountPromptOpen(false);
+    void dismissAccountPrompt();
+    router.push('/(auth)/phone');
+  };
+
+  const onAccountPromptNotNow = () => {
+    setAccountPromptOpen(false);
+    void dismissAccountPrompt();
+  };
+
   const onLogout = async () => {
     setAccountOpen(false);
     await signOut();
-    router.replace('/(auth)/phone');
   };
 
   const onDeleteAccount = async () => {
     const token = session?.token;
+    const phone = session?.user.phone;
     if (!token) {
       await onLogout();
       return;
@@ -191,14 +333,18 @@ export default function HomeScreen() {
     setDeletingAccount(true);
     try {
       await deleteAccount(token);
+      if (phone) {
+        await markPhoneDeleted(phone);
+      }
       setAccountOpen(false);
       await signOut();
-      router.replace('/(auth)/phone');
     } catch (error) {
       if (isAuthFailure(error)) {
+        if (phone) {
+          await markPhoneDeleted(phone);
+        }
         setAccountOpen(false);
         await signOut();
-        router.replace('/(auth)/phone');
         return;
       }
       Alert.alert(
@@ -244,32 +390,25 @@ export default function HomeScreen() {
   }
 
   const showEmptyStations = !isLoading && !isError && stations.length === 0;
+  const locationShared = permission === 'granted';
+  // Don't run the map intro under the welcome overlay — play it after.
+  const introEnabled = !welcomeVisible && welcomePending == null;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <StationMap
         stations={stations}
         userCoords={coords}
+        showUserLocation={permission === 'granted'}
+        introEnabled={introEnabled}
         selectedStationId={pinSelectedId}
         onSelectStation={openStation}
         onDeselect={onDeselect}
         cameraFit={cameraFit}
+        cameraTarget={cameraTarget}
       />
 
-      <View
-        pointerEvents="box-none"
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          paddingTop: insets.top + spacing[2],
-          paddingHorizontal: spacing[5],
-          zIndex: 15,
-        }}
-      >
-        <LocationDeniedBanner visible={permission === 'denied'} />
-      </View>
+      <MapTopBlur />
 
       {showEmptyStations ? (
         <View style={styles.emptyBanner} pointerEvents="box-none">
@@ -294,6 +433,10 @@ export default function HomeScreen() {
       {!sheetOpen ? (
         <>
           <ProfileButton onPress={() => setAccountOpen(true)} />
+          <EnableLocationButton
+            locationShared={locationShared}
+            onPress={onLocatePress}
+          />
           <SupportButton onPress={onSupport} />
           <FindChargerBar
             onPress={onFindNearest}
@@ -302,11 +445,33 @@ export default function HomeScreen() {
         </>
       ) : null}
 
+      <WelcomeOverlay
+        visible={welcomeVisible}
+        variant={welcomeVariant}
+        onFinished={onWelcomeFinished}
+      />
+
+      <LocationPermissionSheet
+        visible={locationSheetOpen}
+        loading={locationRequesting}
+        onContinue={() => {
+          void onContinueLocation();
+        }}
+      />
+
+      <CreateAccountSheet
+        visible={accountPromptOpen}
+        onCreateAccount={onAccountPromptCreate}
+        onNotNow={onAccountPromptNotNow}
+      />
+
       <AccountModal
         visible={accountOpen}
+        signedIn={Boolean(session)}
         phone={session?.user.phone ?? ''}
         deleting={deletingAccount}
         onClose={() => setAccountOpen(false)}
+        onLogin={onLogin}
         onLogout={() => {
           void onLogout();
         }}

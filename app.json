@@ -4,7 +4,7 @@
     "slug": "cuub-user-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/branding/app-icon.png",
+    "icon": "./App_Icon.png",
     "scheme": "cuub",
     "userInterfaceStyle": "dark",
     "ios": {
@@ -20,13 +20,14 @@
         "BGTaskSchedulerPermittedIdentifiers": [
           "com.expo.modules.backgroundtask.processing"
         ]
-      }
+      },
+      "appleTeamId": "8X4H3BPTXL"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#000000",
-        "foregroundImage": "./assets/branding/android-icon-foreground.png",
-        "backgroundImage": "./assets/branding/android-icon-background.png",
+        "foregroundImage": "./App_Icon.png",
+        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "package": "com.cuub.user",
@@ -49,7 +50,8 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#161616"
+          "backgroundColor": "#161616",
+          "image": "./assets/branding/splash_icon.png"
         }
       ],
       [
@@ -61,7 +63,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/branding/app-icon.png",
+          "icon": "./App_Icon.png",
           "color": "#0198FD",
           "defaultChannel": "low-battery"
         }

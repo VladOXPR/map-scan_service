@@ -12,6 +12,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as SplashScreen from 'expo-splash-screen';
 import { useAuthStore } from '@/store/authStore';
 import { useLocationStore } from '@/store/locationStore';
+import { useAccountPromptStore } from '@/store/accountPromptStore';
 import { colors } from '@/theme';
 import { configureMapbox } from '@/lib/mapbox';
 
@@ -29,6 +30,7 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   const hydrateAuth = useAuthStore((s) => s.hydrate);
   const hydrateLocation = useLocationStore((s) => s.hydrate);
+  const hydrateAccountPrompt = useAccountPromptStore((s) => s.hydrate);
   const authHydrated = useAuthStore((s) => s.hydrated);
   const locationHydrated = useLocationStore((s) => s.hydrated);
 
@@ -36,7 +38,8 @@ export default function RootLayout() {
     configureMapbox();
     void hydrateAuth();
     void hydrateLocation();
-  }, [hydrateAuth, hydrateLocation]);
+    void hydrateAccountPrompt();
+  }, [hydrateAuth, hydrateLocation, hydrateAccountPrompt]);
 
   useEffect(() => {
     if (authHydrated && locationHydrated) {
