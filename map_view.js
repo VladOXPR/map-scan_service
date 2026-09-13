@@ -409,7 +409,7 @@ async function startMapApp() {
             mapboxgl: mapboxgl,
             isStickerPage: !!getStickerIdFromURL(),
             hideTriggerButton: embedMode,
-            disableAutoPrompt: embedMode
+            disableAutoPrompt: true
         });
     }
 

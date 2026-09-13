@@ -353,7 +353,7 @@ export function MapView({
         stations={stations}
         isStickerPage={!!stickerId}
         hideTriggerButton={embedMode}
-        disableAutoPrompt={embedMode}
+        disableAutoPrompt
         triggerBottomPx={triggerBottomPx}
       />
     </>
