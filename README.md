@@ -47,6 +47,7 @@ npm run mobile:start
 Web (`apps/web`):
 - `/` and `/map` — full map view with station modal + support button + nearest-station feature
 - `/blank` — minimal map view
+- `/app` — iPhone/Mac redirect to the App Store; other devices get the full map
 - `/:sticker_id` — full map view + scan modal (battery info)
 - `?embed=1` — hides the built-in nearest-station trigger and disables auto-prompt (for iframe parents)
 

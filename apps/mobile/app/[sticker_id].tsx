@@ -3,7 +3,7 @@ import { useLocalSearchParams } from "expo-router";
 import { MapScreen } from "@/features/map-view/MapScreen";
 import { ScanModal } from "@/features/scan/ScanModal";
 
-const RESERVED = new Set(["map", "blank", "api", "_next"]);
+const RESERVED = new Set(["map", "blank", "api", "_next", "app"]);
 
 export default function StickerRoute() {
   const { sticker_id } = useLocalSearchParams<{ sticker_id: string }>();
