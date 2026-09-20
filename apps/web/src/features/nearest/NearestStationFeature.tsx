@@ -450,7 +450,7 @@ export function NearestStationFeature({
           style={triggerStyle}
           onClick={() => setModalOpen(true)}
         >
-          Find nearest station
+          Find nearest location
         </button>
       )}
 

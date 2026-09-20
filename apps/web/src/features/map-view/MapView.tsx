@@ -9,6 +9,7 @@ import { loadStationIcons } from "./loadStationIcons";
 import { StationModal } from "./StationModal";
 import { SupportButton } from "./SupportButton";
 import { NearestStationFeature } from "@/features/nearest/NearestStationFeature";
+import { AppPromptModal } from "@/features/app-prompt/AppPromptModal";
 
 type MapboxModule = typeof mapboxgl;
 
@@ -164,6 +165,8 @@ export function MapView({
           // entire symbol bucket on this source fails to commit, taking
           // both cluster numbers AND unclustered-point icons down with it.
           // Two-font stack gives Mapbox a fallback if the first ever fails.
+          // Keep DIN Pro Bold (known-good glyphs); skip white halo so digits
+          // don't look inflated.
           "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"],
           "text-size": ["step", ["get", "point_count"], 14, 10, 16, 30, 18],
           "text-allow-overlap": true,
@@ -171,8 +174,6 @@ export function MapView({
         },
         paint: {
           "text-color": "#ffffff",
-          "text-halo-color": "#ffffff",
-          "text-halo-width": 1,
         },
       });
 
@@ -356,6 +357,9 @@ export function MapView({
         disableAutoPrompt
         triggerBottomPx={triggerBottomPx}
       />
+      {variant === "full" && (
+        <AppPromptModal disabled={embedMode} stickerId={stickerId} />
+      )}
     </>
   );
 }

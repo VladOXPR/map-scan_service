@@ -174,6 +174,7 @@ async function addMarkersToMap(stationList) {
         filter: ['has', 'point_count'],
         layout: {
             'text-field': ['to-string', ['get', 'point_count']],
+            'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
             'text-size': [
                 'step',
                 ['get', 'point_count'],
@@ -187,9 +188,7 @@ async function addMarkersToMap(stationList) {
             'text-ignore-placement': true
         },
         paint: {
-            'text-color': '#ffffff',
-            'text-halo-color': '#ffffff',
-            'text-halo-width': 1
+            'text-color': '#ffffff'
         }
     });
 

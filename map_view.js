@@ -215,9 +215,7 @@ function addMarkersToMap(stations) {
                 'text-ignore-placement': true
             },
             paint: {
-                'text-color': '#ffffff',
-                'text-halo-color': '#ffffff',
-                'text-halo-width': 1
+                'text-color': '#ffffff'
             }
         });
     }

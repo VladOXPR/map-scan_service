@@ -67,4 +67,17 @@ export class CuubClient {
     });
     return (await res.json()) as BatteryResponse;
   }
+
+  /** Record Get App / App Store tap (server proxies to POST /battery/:id/app). */
+  async recordAppTap(stickerId: string): Promise<BatteryResponse> {
+    const res = await fetch(
+      this.url(`/api/battery/${encodeURIComponent(stickerId)}/app`),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ app: true }),
+      }
+    );
+    return (await res.json()) as BatteryResponse;
+  }
 }

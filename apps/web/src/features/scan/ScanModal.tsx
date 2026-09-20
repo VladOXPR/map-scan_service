@@ -1,18 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import type { BatteryData } from "@cuub/shared";
 import { cuubClient } from "@/lib/cuubClient";
 import { useDurationTimer } from "./useDurationTimer";
 
+const APP_STORE_URL = "https://apps.apple.com/us/app/cuub/id6805257335";
+
 export interface ScanModalProps {
   stickerId: string;
-}
-
-function hasBillableRental(battery: BatteryData | null): boolean {
-  if (!battery) return false;
-  const amountPaid = Number(battery.amountPaid);
-  return Number.isFinite(amountPaid) && amountPaid > 0;
 }
 
 export function ScanModal({ stickerId }: ScanModalProps) {
@@ -24,38 +20,37 @@ export function ScanModal({ stickerId }: ScanModalProps) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      let manufactureId = "";
+      let stickerType = "type one";
       try {
         const result = await cuubClient.getBattery(stickerId);
         if (cancelled) return;
         if (result.success && result.data) {
           setBattery(result.data);
+          manufactureId = String(result.data.manufacture_id ?? "");
+          stickerType = String(result.data.type ?? "type one");
           const isReturned =
             result.data.duration &&
             String(result.data.duration).toLowerCase() === "battery returned";
           setReturned(!!isReturned);
-          // Only show the modal when Energo order data produced a real price.
-          setOpen(hasBillableRental(result.data));
-          // POST records site_visits on cuub-api even when the modal stays closed.
-          cuubClient
-            .createScanRecord(
-              stickerId,
-              String(result.data.manufacture_id ?? ""),
-              String(result.data.type ?? "type one")
-            )
-            .catch((err) =>
-              console.error("Error creating scan record:", err)
-            );
         } else {
-          // Energo down / unknown sticker / empty response — hide modal.
           setBattery(null);
-          setOpen(false);
         }
       } catch (err) {
         console.error("Error fetching battery data:", err);
-        setBattery(null);
-        setOpen(false);
-      } finally {
-        if (!cancelled) setLoaded(true);
+        if (!cancelled) setBattery(null);
+      }
+
+      // Always create a visit so later Get App taps can mark it (POST …/app).
+      if (!cancelled) {
+        cuubClient
+          .createScanRecord(stickerId, manufactureId, stickerType)
+          .catch((err) => console.error("Error creating scan record:", err));
+      }
+
+      if (!cancelled) {
+        setLoaded(true);
+        setOpen(true);
       }
     })();
     return () => {
@@ -63,26 +58,56 @@ export function ScanModal({ stickerId }: ScanModalProps) {
     };
   }, [stickerId]);
 
+  const showDuration = !!battery;
   const initialDuration =
     battery && !returned ? String(battery.duration ?? "00:00:00") : null;
-  const duration = useDurationTimer(initialDuration, !returned && !!battery);
+  const duration = useDurationTimer(
+    initialDuration,
+    showDuration && !returned
+  );
 
-  if (!loaded || !open || !battery) return null;
+  const onGetApp = (e: MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    cuubClient
+      .recordAppTap(stickerId)
+      .catch((err) => console.error("Error recording app tap:", err))
+      .finally(() => {
+        window.open(APP_STORE_URL, "_blank", "noopener,noreferrer");
+      });
+  };
 
-  const paid = `$${battery.amountPaid ?? 0}`;
+  if (!loaded || !open) return null;
 
   return (
-    <div className={`battery-modal ${open ? "active" : ""}`}>
+    <div
+      className={`battery-modal active${showDuration ? "" : " battery-modal--ad-only"}`}
+    >
       <div className="battery-content">
-        <div className="battery-info battery-duration">
-          <div className="battery-label">Duration</div>
-          <div className="battery-value">
-            {returned ? "Battery returned" : duration}
+        {showDuration && (
+          <div className="battery-info battery-duration">
+            <div className="battery-label">Duration</div>
+            <div className="battery-value">
+              {returned ? "Battery returned" : duration}
+            </div>
           </div>
-        </div>
-        <div className="battery-info battery-paid">
-          <div className="battery-label">Paid</div>
-          <div className="battery-value">{paid}</div>
+        )}
+        <div className="battery-app-cta">
+          <img
+            className="battery-app-logo"
+            src="/assets/applogo.png"
+            alt="CUUB"
+            width={40}
+            height={40}
+          />
+          <a
+            className="battery-get-app-btn"
+            href={APP_STORE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={onGetApp}
+          >
+            Get the App
+          </a>
         </div>
       </div>
     </div>
