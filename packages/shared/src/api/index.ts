@@ -76,6 +76,7 @@ export class CuubClient {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ app: true }),
+        keepalive: true,
       }
     );
     return (await res.json()) as BatteryResponse;

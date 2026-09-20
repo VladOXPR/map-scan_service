@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useState } from "react";
 import type { BatteryData } from "@cuub/shared";
 import { cuubClient } from "@/lib/cuubClient";
 import { useDurationTimer } from "./useDurationTimer";
@@ -66,14 +66,10 @@ export function ScanModal({ stickerId }: ScanModalProps) {
     showDuration && !returned
   );
 
-  const onGetApp = (e: MouseEvent<HTMLAnchorElement>) => {
-    e.preventDefault();
-    cuubClient
+  const onGetApp = () => {
+    void cuubClient
       .recordAppTap(stickerId)
-      .catch((err) => console.error("Error recording app tap:", err))
-      .finally(() => {
-        window.open(APP_STORE_URL, "_blank", "noopener,noreferrer");
-      });
+      .catch((err) => console.error("Error recording app tap:", err));
   };
 
   if (!loaded || !open) return null;
@@ -102,7 +98,6 @@ export function ScanModal({ stickerId }: ScanModalProps) {
           <a
             className="battery-get-app-btn"
             href={APP_STORE_URL}
-            target="_blank"
             rel="noopener noreferrer"
             onClick={onGetApp}
           >
