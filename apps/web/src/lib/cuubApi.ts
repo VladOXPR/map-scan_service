@@ -236,10 +236,14 @@ function stationsPayload(stations: Station[]) {
   };
 }
 
+/** Live Energo enrichment must finish within this window or we use public GET /map. */
+const LIVE_STATIONS_TIMEOUT_MS = 2000;
+
 /**
  * Prefer live Energo enrichment via machine-auth stations list (same path as
  * dashboard). Always merge inactive (non-inventory) locations when auth is
- * available. Fall back to public GET /map pins if live call fails.
+ * available. Fall back to public GET /map pins if the live call fails or does
+ * not respond within LIVE_STATIONS_TIMEOUT_MS.
  */
 export async function fetchMapStations(): Promise<{ status: number; payload: unknown }> {
   const baseUrl = cuubApiUrl();
@@ -256,6 +260,8 @@ export async function fetchMapStations(): Promise<{ status: number; payload: unk
     : [];
 
   if (token) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LIVE_STATIONS_TIMEOUT_MS);
     try {
       // Same query shape as cuub-dashboard fetchAllStations({ includeLive: true }).
       // is_inventory=false keeps inventory cabinets off the map.
@@ -268,6 +274,7 @@ export async function fetchMapStations(): Promise<{ status: number; payload: unk
           Authorization: `Bearer ${token}`,
         },
         cache: "no-store",
+        signal: controller.signal,
       });
 
       const text = await res.text();
@@ -298,6 +305,8 @@ export async function fetchMapStations(): Promise<{ status: number; payload: unk
       }
     } catch (err) {
       console.warn("[stations] live include_live network error; falling back to GET /map:", err);
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

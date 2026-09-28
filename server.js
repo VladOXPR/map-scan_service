@@ -22,7 +22,7 @@ function parseJson(text) {
     }
 }
 
-function fetchCuubApi({ path, method, headers, body, requireAuth }, callback) {
+function fetchCuubApi({ path, method, headers, body, requireAuth, timeoutMs }, callback) {
     const baseUrl = cuubApiUrl();
     const token = cuubApiToken();
 
@@ -63,6 +63,15 @@ function fetchCuubApi({ path, method, headers, body, requireAuth }, callback) {
         },
     };
 
+    let settled = false;
+    let timer = null;
+    const finish = (status, payload) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        callback(status, payload);
+    };
+
     const request = client.request(options, (apiResponse) => {
         let data = '';
         apiResponse.on('data', (chunk) => {
@@ -71,17 +80,25 @@ function fetchCuubApi({ path, method, headers, body, requireAuth }, callback) {
         apiResponse.on('end', () => {
             const json = parseJson(data);
             if (json === null) {
-                callback(500, { success: false, error: 'Failed to parse API response' });
+                finish(500, { success: false, error: 'Failed to parse API response' });
                 return;
             }
-            callback(apiResponse.statusCode || 500, json);
+            finish(apiResponse.statusCode || 500, json);
         });
     });
 
     request.on('error', (error) => {
+        if (settled) return;
         console.error('cuub-api request error:', error);
-        callback(502, { success: false, error: 'Failed to reach cuub-api' });
+        finish(502, { success: false, error: 'Failed to reach cuub-api' });
     });
+
+    if (timeoutMs) {
+        timer = setTimeout(() => {
+            finish(504, { success: false, error: 'cuub-api request timed out' });
+            request.destroy();
+        }, timeoutMs);
+    }
 
     if (postData) {
         request.write(postData);
@@ -266,27 +283,30 @@ app.get('/api/stations', (req, res) => {
             return respondWithPublicMap(res, inactivePins);
         }
 
-        fetchCuubApi({ path: livePath, method: 'GET', requireAuth: true }, (status, payload) => {
-            if (status === 200 && payload?.success && Array.isArray(payload.data)) {
-                const adapted = adaptLiveStations(payload);
-                if (adapted.success && (adapted.data.length > 0 || inactivePins.length > 0)) {
-                    return respondWithStations(
-                        res,
-                        mergeInactivePins(
-                            adapted.data,
-                            inactivePins,
-                            adapted.coveredLocationIds,
-                        ),
-                    );
+        fetchCuubApi(
+            { path: livePath, method: 'GET', requireAuth: true, timeoutMs: 2000 },
+            (status, payload) => {
+                if (status === 200 && payload?.success && Array.isArray(payload.data)) {
+                    const adapted = adaptLiveStations(payload);
+                    if (adapted.success && (adapted.data.length > 0 || inactivePins.length > 0)) {
+                        return respondWithStations(
+                            res,
+                            mergeInactivePins(
+                                adapted.data,
+                                inactivePins,
+                                adapted.coveredLocationIds,
+                            ),
+                        );
+                    }
                 }
-            }
 
-            console.warn(
-                '[stations] live include_live fetch failed; falling back to GET /map:',
-                status,
-            );
-            respondWithPublicMap(res, inactivePins);
-        });
+                console.warn(
+                    '[stations] live include_live fetch failed; falling back to GET /map:',
+                    status,
+                );
+                respondWithPublicMap(res, inactivePins);
+            },
+        );
     });
 });
 
