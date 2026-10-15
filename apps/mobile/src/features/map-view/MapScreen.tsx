@@ -9,10 +9,6 @@ import { StationModal } from "./StationModal";
 import { SupportButton } from "./SupportButton";
 import { NearestStationFeature } from "@/features/nearest/NearestStationFeature";
 
-// One bitmap per filled-slot count (0–6). Native Mapbox doesn't render
-// SVG, so these are pre-rasterized PNGs at 1x/2x/3x by
-// scripts/rasterize-station-icons.sh; React Native's asset density picker
-// chooses the right file at runtime.
 const STATION_ICONS = {
   "station-icon-0": require("../../../../../assets/stations/icon0.png"),
   "station-icon-1": require("../../../../../assets/stations/icon1.png"),
@@ -32,6 +28,49 @@ export interface MapScreenProps {
   stickerId?: string | null;
 }
 
+function isClusterFeature(feature: GeoJSON.Feature | undefined): boolean {
+  if (!feature?.properties) return false;
+  const p = feature.properties;
+  return (
+    p.cluster === true ||
+    p.cluster === 1 ||
+    p.cluster === "true" ||
+    typeof p.point_count === "number" ||
+    typeof p.point_count === "string"
+  );
+}
+
+/** Resolve a pressed Mapbox feature to a Station (skips clusters). */
+function findStation(
+  stations: Station[],
+  features: GeoJSON.Feature[] | undefined
+): Station | null {
+  if (!features?.length) return null;
+
+  for (const feature of features) {
+    if (isClusterFeature(feature)) continue;
+
+    const props = feature.properties ?? {};
+    const id = props.id ?? feature.id;
+    if (id != null) {
+      const byId = stations.find((s) => String(s.id) === String(id));
+      if (byId) return byId;
+    }
+
+    if (feature.geometry?.type === "Point") {
+      const [lng, lat] = feature.geometry.coordinates;
+      const byCoords = stations.find(
+        (s) =>
+          Math.abs(parseFloat(String(s.longitude)) - lng) < 0.00005 &&
+          Math.abs(parseFloat(String(s.latitude)) - lat) < 0.00005
+      );
+      if (byCoords) return byCoords;
+    }
+  }
+
+  return null;
+}
+
 export function MapScreen({
   variant = "full",
   stickerId = null,
@@ -39,6 +78,9 @@ export function MapScreen({
   const { stations } = useStations();
   const [selected, setSelected] = useState<Station | null>(null);
   const cameraRef = useRef<Mapbox.Camera | null>(null);
+  const shapeRef = useRef<Mapbox.ShapeSource | null>(null);
+  const stationsRef = useRef(stations);
+  stationsRef.current = stations;
 
   const geojson = useMemo(
     () => stationsToGeoJSON(stations, selected?.id ?? null),
@@ -57,17 +99,49 @@ export function MapScreen({
     []
   );
 
-  const handleFeaturePress = useCallback(
-    (event: { features: Array<{ properties?: { [key: string]: unknown } | null }> }) => {
-      if (variant !== "full") return;
-      const props = event.features?.[0]?.properties;
-      if (!props) return;
-      const id = props.id;
-      const station = stations.find((s) => String(s.id) === String(id));
-      if (station) setSelected(station);
+  /** Pin tap → open bottom location sheet. Cluster tap → zoom in. */
+  const onShapePress = useCallback(
+    async (event: { features?: GeoJSON.Feature[] }) => {
+      const features = event.features ?? [];
+      if (features.length === 0) return;
+
+      // 1) Unclustered pin → location bottom popup
+      if (variant === "full") {
+        const station = findStation(stationsRef.current, features);
+        if (station) {
+          setSelected(station);
+          return;
+        }
+      }
+
+      // 2) Cluster → expand
+      const clusterFeature = features.find((f) => isClusterFeature(f));
+      if (clusterFeature && shapeRef.current) {
+        try {
+          const zoom = await shapeRef.current.getClusterExpansionZoom(
+            // @ts-expect-error Feature typing varies by rnmapbox version
+            clusterFeature
+          );
+          const coords =
+            clusterFeature.geometry?.type === "Point"
+              ? (clusterFeature.geometry.coordinates as [number, number])
+              : null;
+          if (coords && zoom != null) {
+            cameraRef.current?.setCamera({
+              centerCoordinate: coords,
+              zoomLevel: zoom,
+              animationDuration: 400,
+            });
+          }
+        } catch {
+          /* ignore */
+        }
+      }
     },
-    [stations, variant]
+    [variant]
   );
+
+  const sheetOpen = variant === "full" && selected != null;
 
   return (
     <View style={styles.root}>
@@ -86,13 +160,17 @@ export function MapScreen({
           }}
         />
 
+        <Mapbox.Images images={STATION_ICONS} />
+
         <Mapbox.ShapeSource
+          ref={shapeRef}
           id="stations"
           shape={geojson as unknown as GeoJSON.FeatureCollection}
           cluster
           clusterRadius={25}
           clusterMaxZoomLevel={22}
-          onPress={handleFeaturePress}
+          hitbox={{ width: 80, height: 80 }}
+          onPress={onShapePress}
         >
           <Mapbox.CircleLayer
             id="clusters"
@@ -119,28 +197,46 @@ export function MapScreen({
               textField: ["to-string", ["get", "point_count"]],
               textSize: ["step", ["get", "point_count"], 14, 10, 16, 30, 18],
               textColor: "#ffffff",
-              textHaloColor: "#ffffff",
-              textHaloWidth: 1,
               textAllowOverlap: true,
               textIgnorePlacement: true,
+            }}
+          />
+          {/* Slightly visible hit target — opacity 0 is not tappable */}
+          <Mapbox.CircleLayer
+            id="unclustered-hit"
+            filter={["!", ["has", "point_count"]]}
+            style={{
+              circleRadius: 22,
+              circleColor: "#0198FD",
+              circleOpacity: 0.01,
+              circleStrokeWidth: 0,
             }}
           />
           <Mapbox.SymbolLayer
             id="unclustered-point"
             filter={["!", ["has", "point_count"]]}
             style={{
-              // Icon0–6 from filled_slots (coalesce missing → 6). Offline
-              // and inactive use the same icon at 40% opacity. Keep in sync with web.
               iconImage: [
                 "match",
-                ["min", 6, ["to-number", ["coalesce", ["get", "filled_slots"], 6]]],
-                0, "station-icon-0",
-                1, "station-icon-1",
-                2, "station-icon-2",
-                3, "station-icon-3",
-                4, "station-icon-4",
-                5, "station-icon-5",
-                6, "station-icon-6",
+                [
+                  "min",
+                  6,
+                  ["to-number", ["coalesce", ["get", "filled_slots"], 6]],
+                ],
+                0,
+                "station-icon-0",
+                1,
+                "station-icon-1",
+                2,
+                "station-icon-2",
+                3,
+                "station-icon-3",
+                4,
+                "station-icon-4",
+                5,
+                "station-icon-5",
+                6,
+                "station-icon-6",
                 "station-icon-6",
               ] as unknown as string,
               iconSize:
@@ -163,12 +259,14 @@ export function MapScreen({
             }}
           />
         </Mapbox.ShapeSource>
-        <Mapbox.Images images={STATION_ICONS} />
       </Mapbox.MapView>
 
       {variant === "full" && (
         <>
-          <StationModal station={selected} onClose={() => setSelected(null)} />
+          <StationModal
+            station={selected}
+            onClose={() => setSelected(null)}
+          />
           <SupportButton stickerId={stickerId} />
         </>
       )}
@@ -177,6 +275,8 @@ export function MapScreen({
         stations={stations}
         isStickerPage={!!stickerId}
         onCameraTarget={onCameraTarget}
+        // Keep nearest button above the location sheet when open
+        bottom={sheetOpen ? 200 : 20}
       />
     </View>
   );

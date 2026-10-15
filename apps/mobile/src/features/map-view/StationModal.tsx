@@ -1,5 +1,5 @@
 import React from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { Station } from "@cuub/shared";
 import { openDirectionsTo } from "@/lib/directions";
 
@@ -12,77 +12,77 @@ function hasValue(value: unknown): boolean {
   return value !== null && value !== undefined && value !== "";
 }
 
+/** Bottom location sheet — absolute overlay (no RN Modal). */
 export function StationModal({ station, onClose }: StationModalProps) {
-  const visible = !!station;
-  const isInactive = station?.inactive === true;
-  const isOffline = !isInactive && station?.online === false;
+  if (!station) return null;
+
+  const isInactive = station.inactive === true;
+  const isOffline = !isInactive && station.online === false;
   const showSlots =
-    !!station &&
     !isOffline &&
     !isInactive &&
     (hasValue(station.filled_slots) || hasValue(station.open_slots));
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.header}>
-            <Text style={styles.title}>{station?.title || "Title"}</Text>
-            {(isInactive || isOffline) && (
-              <Text style={styles.offline}>Offline</Text>
-            )}
-            {showSlots && (
-              <View style={styles.slots}>
-                <View style={styles.slotInfo}>
-                  <View style={[styles.slotIcon, styles.slotIconFilled]} />
-                  <Text style={styles.slotText}>
-                    <Text style={styles.slotNumber}>
-                      {hasValue(station?.filled_slots)
-                        ? String(station?.filled_slots)
-                        : 0}
-                    </Text>
-                    {"  "}Filled Slots
+    <View style={styles.wrap} pointerEvents="box-none">
+      <Pressable style={styles.backdrop} onPress={onClose} />
+      <View style={styles.sheet}>
+        <View style={styles.header}>
+          <Text style={styles.title}>{station.title || "Title"}</Text>
+          {(isInactive || isOffline) && (
+            <Text style={styles.offline}>Offline</Text>
+          )}
+          {showSlots && (
+            <View style={styles.slots}>
+              <View style={styles.slotInfo}>
+                <View style={[styles.slotIcon, styles.slotIconFilled]} />
+                <Text style={styles.slotText}>
+                  <Text style={styles.slotNumber}>
+                    {hasValue(station.filled_slots)
+                      ? String(station.filled_slots)
+                      : 0}
                   </Text>
-                </View>
-                <View style={styles.slotInfo}>
-                  <View style={[styles.slotIcon, styles.slotIconOpen]} />
-                  <Text style={styles.slotText}>
-                    <Text style={styles.slotNumber}>
-                      {hasValue(station?.open_slots)
-                        ? String(station?.open_slots)
-                        : 0}
-                    </Text>
-                    {"  "}Open Slots
-                  </Text>
-                </View>
+                  {"  "}Filled Slots
+                </Text>
               </View>
-            )}
-          </View>
+              <View style={styles.slotInfo}>
+                <View style={[styles.slotIcon, styles.slotIconOpen]} />
+                <Text style={styles.slotText}>
+                  <Text style={styles.slotNumber}>
+                    {hasValue(station.open_slots)
+                      ? String(station.open_slots)
+                      : 0}
+                  </Text>
+                  {"  "}Open Slots
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
 
-          <Pressable
-            style={styles.directionsButton}
-            onPress={() => {
-              if (station) openDirectionsTo(station.latitude, station.longitude);
-            }}
-          >
-            <Text style={styles.directionsText}>Get Directions</Text>
-          </Pressable>
+        <Pressable
+          style={styles.directionsButton}
+          onPress={() =>
+            openDirectionsTo(station.latitude, station.longitude)
+          }
+        >
+          <Text style={styles.directionsText}>Get Directions</Text>
         </Pressable>
-      </Pressable>
-    </Modal>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
+  wrap: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.0)",
+    zIndex: 100,
+    elevation: 100,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.35)",
   },
   sheet: {
     backgroundColor: "#000",
@@ -92,6 +92,11 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     gap: 20,
+    elevation: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
   },
   header: {
     flexDirection: "row",

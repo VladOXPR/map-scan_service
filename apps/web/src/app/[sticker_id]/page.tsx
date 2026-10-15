@@ -3,7 +3,15 @@ import { MapView } from "@/features/map-view/MapView";
 import { ScanModal } from "@/features/scan/ScanModal";
 import { getInitialStations } from "@/lib/getInitialStations";
 
-const RESERVED = new Set(["map", "blank", "api", "_next", "favicon.ico", "app"]);
+const RESERVED = new Set([
+  "map",
+  "blank",
+  "api",
+  "_next",
+  "favicon.ico",
+  "app",
+  "sales",
+]);
 
 export const dynamic = "force-dynamic";
 

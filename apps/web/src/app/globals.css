@@ -1,3 +1,8 @@
+:root {
+  --cuub-panel-bg: #161616;
+  --cuub-panel-border: #292929;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -29,6 +34,171 @@ body {
   min-height: 100%;
 }
 
+/* Sales map — address search overlay */
+.sales-map-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.sales-search {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1100;
+  display: flex;
+  gap: 8px;
+  width: calc(100% - 32px);
+  max-width: 520px;
+  padding: 8px;
+  border-radius: 14px;
+  background: var(--cuub-panel-bg);
+  border: 1px solid var(--cuub-panel-border);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.sales-search-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--cuub-panel-border);
+  outline: none;
+  background: var(--cuub-panel-bg);
+  color: #fff;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 15px;
+  font-family: inherit;
+}
+
+.sales-search-input::placeholder {
+  color: #808080;
+}
+
+.sales-search-btn {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 16px;
+  background: #0198fd;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sales-search-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.sales-search-btn:not(:disabled):active {
+  background: #0178cd;
+}
+
+.sales-search-status {
+  position: fixed;
+  top: 92px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1100;
+  max-width: calc(100% - 32px);
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: var(--cuub-panel-bg);
+  border: 1px solid var(--cuub-panel-border);
+  color: #fff;
+  font-size: 13px;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.sales-search-error {
+  color: #ffb4b4;
+}
+
+.sales-nearby {
+  position: fixed;
+  top: 92px; /* search bar (~68px) + gap */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1100;
+  display: flex;
+  gap: 8px;
+  width: calc(100% - 32px);
+  max-width: 520px; /* match .sales-search */
+  box-sizing: border-box;
+}
+
+.sales-nearby-chip {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--cuub-panel-border);
+  border-radius: 14px;
+  background: var(--cuub-panel-bg);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  transition: background-color 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.sales-nearby-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.sales-nearby-distance {
+  flex-shrink: 0;
+  color: #9a9a9a;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sales-nearby-chip:hover {
+  background: #1c1c1c;
+  border-color: #3a3a3a;
+}
+
+.sales-nearby-chip.active {
+  background: #0198fd;
+  border-color: #0198fd;
+  color: #fff;
+}
+
+.sales-nearby-chip.active .sales-nearby-distance {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.sales-nearby-chip:active {
+  transform: scale(0.98);
+}
+
+@media (max-width: 520px) {
+  .sales-nearby {
+    flex-direction: column;
+  }
+
+  .sales-nearby-title {
+    white-space: normal;
+  }
+}
+
 /* Station modal */
 .station-modal {
   position: fixed;
@@ -37,7 +207,9 @@ body {
   transform: translate(-50%, 100%);
   max-width: 500px;
   width: 100%;
-  background-color: #000;
+  background-color: var(--cuub-panel-bg);
+  border: 1px solid var(--cuub-panel-border);
+  border-bottom: none;
   border-top-left-radius: 20px;
   border-top-right-radius: 20px;
   padding: 20px 20px 30px;
@@ -143,7 +315,7 @@ body {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  background-color: #000;
+  background-color: var(--cuub-panel-bg);
   border-radius: 28px;
   padding: 12px 20px;
   display: flex;
@@ -153,7 +325,7 @@ body {
   z-index: 1000;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   transition: transform 0.2s, box-shadow 0.2s, bottom 0.3s ease-out;
-  border: none;
+  border: 1px solid var(--cuub-panel-border);
 }
 
 .support-button:hover {
@@ -180,7 +352,9 @@ body {
   transform: translate(-50%, -100%);
   max-width: 500px;
   width: 100%;
-  background-color: #000;
+  background-color: var(--cuub-panel-bg);
+  border: 1px solid var(--cuub-panel-border);
+  border-top: none;
   border-bottom-left-radius: 20px;
   border-bottom-right-radius: 20px;
   padding: 20px;
@@ -312,7 +486,8 @@ body {
   transform: translate(-50%, -50%) scale(0.96);
   width: calc(100% - 40px);
   max-width: 380px;
-  background-color: #000;
+  background-color: var(--cuub-panel-bg);
+  border: 1px solid var(--cuub-panel-border);
   color: #fff;
   border-radius: 16px;
   padding: 24px;
@@ -365,7 +540,8 @@ body {
   transform: translate(-50%, -50%);
   width: calc(100% - 40px);
   max-width: 320px;
-  background-color: #000;
+  background-color: var(--cuub-panel-bg);
+  border: 1px solid var(--cuub-panel-border);
   color: #fff;
   border-radius: 16px;
   padding: 24px 20px 20px;
@@ -427,13 +603,13 @@ body {
 }
 
 .cuub-loc-btn-skip {
-  background-color: #000;
+  background-color: var(--cuub-panel-bg);
   color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid var(--cuub-panel-border);
 }
 
 .cuub-loc-btn-skip:active {
-  background-color: #111;
+  background-color: #1c1c1c;
 }
 
 .cuub-nearest-card {
@@ -443,7 +619,8 @@ body {
   transform: translate(-50%, -120%);
   width: calc(100% - 40px);
   max-width: 380px;
-  background-color: #000;
+  background-color: var(--cuub-panel-bg);
+  border: 1px solid var(--cuub-panel-border);
   color: #fff;
   border-radius: 14px;
   padding: 14px 16px;
@@ -574,7 +751,8 @@ body.cuub-sticker-page .cuub-nearest-card {
   bottom: 90px;
   left: 50%;
   transform: translate(-50%, 20px);
-  background-color: #000;
+  background-color: var(--cuub-panel-bg);
+  border: 1px solid var(--cuub-panel-border);
   color: #fff;
   font-size: 13px;
   font-weight: 500;
