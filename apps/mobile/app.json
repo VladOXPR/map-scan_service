@@ -1,0 +1,85 @@
+{
+  "expo": {
+    "name": "CUUB",
+    "slug": "cuub-user-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./App_Icon.png",
+    "scheme": "cuub",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "tech.cuub.user",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "CUUB uses your location to show nearby battery stations and alert you when your phone battery is low and a station is close by.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": [
+          "processing",
+          "remote-notification"
+        ],
+        "BGTaskSchedulerPermittedIdentifiers": [
+          "com.expo.modules.backgroundtask.processing"
+        ]
+      },
+      "appleTeamId": "8X4H3BPTXL"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#000000",
+        "foregroundImage": "./App_Icon.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.cuub.user",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/branding/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#161616",
+          "image": "./assets/branding/splash_icon.png"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "CUUB uses your location to show nearby battery stations and alert you when your phone battery is low and a station is close by."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./App_Icon.png",
+          "color": "#0198FD",
+          "defaultChannel": "low-battery"
+        }
+      ],
+      "@rnmapbox/maps",
+      "expo-background-task"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "c8e8797e-0a9e-4564-882b-49a6f2e6f528"
+      },
+      "router": {}
+    },
+    "owner": "cuub"
+  }
+}
