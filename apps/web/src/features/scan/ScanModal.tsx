@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BatteryData } from "@cuub/shared";
+import { GradientButton } from "@/components/GradientButton";
 import { cuubClient } from "@/lib/cuubClient";
 import { useDurationTimer } from "./useDurationTimer";
 
@@ -9,13 +10,16 @@ const APP_STORE_URL = "https://apps.apple.com/us/app/cuub/id6805257335";
 
 export interface ScanModalProps {
   stickerId: string;
+  /** Rendered height of the card (0 while hidden), for laying out map chrome below it. */
+  onHeightChange?: (px: number) => void;
 }
 
-export function ScanModal({ stickerId }: ScanModalProps) {
+export function ScanModal({ stickerId, onHeightChange }: ScanModalProps) {
   const [open, setOpen] = useState(false);
   const [battery, setBattery] = useState<BatteryData | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [returned, setReturned] = useState(false);
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,13 +62,26 @@ export function ScanModal({ stickerId }: ScanModalProps) {
     };
   }, [stickerId]);
 
+  const visible = loaded && open;
+
+  useEffect(() => {
+    if (!onHeightChange) return;
+    const el = cardRef.current;
+    if (!visible || !el) {
+      onHeightChange(0);
+      return;
+    }
+    const report = () => onHeightChange(el.offsetHeight);
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [visible, onHeightChange]);
+
   const showDuration = !!battery;
   const initialDuration =
     battery && !returned ? String(battery.duration ?? "00:00:00") : null;
-  const duration = useDurationTimer(
-    initialDuration,
-    showDuration && !returned
-  );
+  const duration = useDurationTimer(initialDuration, showDuration && !returned);
 
   const onGetApp = () => {
     void cuubClient
@@ -72,38 +89,27 @@ export function ScanModal({ stickerId }: ScanModalProps) {
       .catch((err) => console.error("Error recording app tap:", err));
   };
 
-  if (!loaded || !open) return null;
+  if (!visible) return null;
 
   return (
-    <div
-      className={`battery-modal active${showDuration ? "" : " battery-modal--ad-only"}`}
-    >
-      <div className="battery-content">
-        {showDuration && (
-          <div className="battery-info battery-duration">
-            <div className="battery-label">Duration</div>
-            <div className="battery-value">
-              {returned ? "Battery returned" : duration}
-            </div>
+    <div ref={cardRef} className={`scan-card${showDuration ? "" : " scan-card--promo"}`}>
+      {showDuration && (
+        <div className="scan-card-stat">
+          <div className="scan-card-label">Duration</div>
+          <div className={`scan-card-value${returned ? " scan-card-value--returned" : ""}`}>
+            {returned ? "Battery returned" : duration}
           </div>
-        )}
-        <div className="battery-app-cta">
-          <img
-            className="battery-app-logo"
-            src="/assets/applogo.png"
-            alt="CUUB"
-            width={40}
-            height={40}
-          />
-          <a
-            className="battery-get-app-btn"
-            href={APP_STORE_URL}
-            rel="noopener noreferrer"
-            onClick={onGetApp}
-          >
-            Get the App
-          </a>
         </div>
+      )}
+      <div className="scan-card-cta">
+        <img
+          className="scan-card-logo"
+          src="/assets/applogo.png"
+          alt="CUUB"
+          width={44}
+          height={44}
+        />
+        <GradientButton size="sm" label="Get the App" href={APP_STORE_URL} onClick={onGetApp} />
       </div>
     </div>
   );

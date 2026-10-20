@@ -9,6 +9,8 @@ export interface Station {
   online?: boolean | null;
   /** true when the venue location is INACTIVE (shown at reduced opacity) */
   inactive?: boolean;
+  /** Cabinet size parsed from the station type (SLOT_6_WHITE → 6) when known */
+  slot_capacity?: number | null;
 }
 
 export interface Coords {

@@ -6,7 +6,7 @@ import type { Station } from "@cuub/shared";
 import { cuubClient } from "@/lib/cuubClient";
 import { stationsToGeoJSON } from "@/features/map-view/stationsToGeoJSON";
 import { loadStationIcons } from "@/features/map-view/loadStationIcons";
-import { StationModal } from "@/features/map-view/StationModal";
+import { StationSheet } from "@/features/map-view/StationSheet";
 import { nearestStations, type RankedStation } from "./nearestStations";
 
 type MapboxModule = typeof mapboxgl;
@@ -41,6 +41,9 @@ export function SalesMapView({ initialStations = [] }: SalesMapViewProps) {
   const [nearby, setNearby] = useState<RankedStation[]>([]);
   const [searching, setSearching] = useState(false);
   const [modalHeight, setModalHeight] = useState(0);
+  const [searchPoint, setSearchPoint] = useState<{ latitude: number; longitude: number } | null>(
+    null
+  );
 
   stationsRef.current = stations;
   selectedRef.current = selectedStation;
@@ -69,7 +72,9 @@ export function SalesMapView({ initialStations = [] }: SalesMapViewProps) {
         bearing: 0,
         pitch: 45,
         fadeDuration: 0,
+        attributionControl: false,
       });
+      instance.addControl(new mb.AttributionControl({ compact: true }), "bottom-right");
       mapRef.current = instance;
       setMapboxgl(mb);
       setMap(instance);
@@ -349,6 +354,7 @@ export function SalesMapView({ initialStations = [] }: SalesMapViewProps) {
 
       const { latitude, longitude } = json.data;
       const lngLat: [number, number] = [longitude, latitude];
+      setSearchPoint({ latitude, longitude });
 
       if (markerRef.current) {
         markerRef.current.setLngLat(lngLat);
@@ -443,10 +449,12 @@ export function SalesMapView({ initialStations = [] }: SalesMapViewProps) {
 
       <div ref={containerRef} className="cuub-map" id="sales-map" />
 
-      <StationModal
+      <StationSheet
         station={selectedStation}
-        onClose={() => setSelectedStation(null)}
-        onHeightChange={setModalHeight}
+        open={selectedStation != null}
+        distanceFrom={searchPoint}
+        onRequestClose={() => setSelectedStation(null)}
+        onVisibleHeightChange={setModalHeight}
       />
     </div>
   );

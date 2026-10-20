@@ -17,6 +17,7 @@ type CuubMapRow = {
 
 type CuubLiveStationRow = {
   manufactureId?: string;
+  type?: string;
   status?: string;
   currentLocation?: {
     locationId?: string;
@@ -75,6 +76,14 @@ function hasValidCoords(
 
 function locationStatus(value: string | undefined | null): string {
   return String(value ?? "").toUpperCase();
+}
+
+/** SLOT_6_WHITE → 6, SLOT_24_BLACK → 24. */
+function slotCapacityFromType(type: string | undefined | null): number | null {
+  const match = String(type ?? "").match(/SLOT[_\s-]?(\d+)/i);
+  if (!match) return null;
+  const n = Number.parseInt(match[1], 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 /** Public GET /map pins only — no live slot/online data. Active venues only. */
@@ -152,6 +161,7 @@ function adaptLiveStations(rows: CuubLiveStationRow[]): AdaptedLive {
         open_slots: inactive ? null : live?.openSlots ?? null,
         online: inactive ? null : live ? (live.online ?? false) : null,
         inactive,
+        slot_capacity: slotCapacityFromType(row.type),
       };
     })
     .filter((row): row is Station => row != null);
