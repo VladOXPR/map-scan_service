@@ -1,0 +1,641 @@
+{
+  "280e1a17-797f-493b-a090-e8742a22b740": {
+    "name": "Annoyance Theater",
+    "tue": [
+      "11:30",
+      "02:00"
+    ],
+    "wed": [
+      "11:30",
+      "02:00"
+    ]
+  },
+  "4879452c-0793-40cd-a26d-e397670b012d": {
+    "name": "Arts & Letters",
+    "tue": [
+      "07:00",
+      "22:00"
+    ],
+    "wed": [
+      "07:00",
+      "22:00"
+    ]
+  },
+  "29381df6-81b0-43b1-bd24-5b1efed1cebb": {
+    "name": "Bar106 The Neighborhood Tavern",
+    "tue": [
+      "14:00",
+      "00:00"
+    ],
+    "wed": [
+      "14:00",
+      "00:00"
+    ]
+  },
+  "afeabab4-71af-4574-96d2-32c181d28f9a": {
+    "name": "Barney Callaghan's Pub",
+    "tue": [
+      "14:00",
+      "02:00"
+    ],
+    "wed": [
+      "14:00",
+      "02:00"
+    ]
+  },
+  "611dc758-34b3-4dfc-98fc-9c3bf8fd9b36": {
+    "name": "Chris’ Beer Garden",
+    "tue": null,
+    "wed": null
+  },
+  "fe64c80b-ac64-4235-97ca-e2202d4cd808": {
+    "name": "Clover Lincoln Park",
+    "tue": [
+      "16:00",
+      "02:00"
+    ],
+    "wed": [
+      "16:00",
+      "02:00"
+    ]
+  },
+  "c8cdf2bb-d1ca-4fae-8e8f-4404a912ceec": {
+    "name": "Codys Public House",
+    "tue": [
+      "12:00",
+      "02:00"
+    ],
+    "wed": [
+      "12:00",
+      "02:00"
+    ]
+  },
+  "929caa71-4129-4cc7-af13-56c363edfbe1": {
+    "name": "CSU Long Beach 1",
+    "tue": null,
+    "wed": null,
+    "hours_unknown": true
+  },
+  "4b866319-e3eb-4f1a-98d0-ecf997fed17f": {
+    "name": "CSU Long Beach 2",
+    "tue": null,
+    "wed": null,
+    "hours_unknown": true
+  },
+  "2d7b3e35-a53a-4fa5-a63a-1e73c9bee6ef": {
+    "name": "CSU Long Beach 3",
+    "tue": null,
+    "wed": null,
+    "hours_unknown": true
+  },
+  "10bebe4e-5de2-493c-a1e8-8c156eee0708": {
+    "name": "DePaul - Munroe Hall",
+    "tue": [
+      "00:00",
+      "24:00"
+    ],
+    "wed": [
+      "00:00",
+      "24:00"
+    ],
+    "note": "Residence hall, 24/7 resident access"
+  },
+  "e795a929-1a16-45db-baa4-2f636efcb793": {
+    "name": "DePaul - Ozanam Hall",
+    "tue": [
+      "00:00",
+      "24:00"
+    ],
+    "wed": [
+      "00:00",
+      "24:00"
+    ],
+    "note": "Residence hall, 24/7 resident access"
+  },
+  "ea7cbd3f-b1d5-433e-be34-2951e6bde60e": {
+    "name": "DePaul - University Hall",
+    "tue": [
+      "00:00",
+      "24:00"
+    ],
+    "wed": [
+      "00:00",
+      "24:00"
+    ],
+    "note": "Residence hall, 24/7 resident access"
+  },
+  "30f1d8e2-47d1-4530-b0b1-b30800d68a3e": {
+    "name": "DePaul LP Student Center",
+    "tue": [
+      "07:30",
+      "00:00"
+    ],
+    "wed": [
+      "07:30",
+      "00:00"
+    ]
+  },
+  "aae4bd13-55ae-4b52-b5b5-c2e51334a20f": {
+    "name": "DePaul The Ray Gym",
+    "tue": [
+      "06:00",
+      "23:00"
+    ],
+    "wed": [
+      "06:00",
+      "23:00"
+    ]
+  },
+  "0a221ca6-a0c5-48ef-b87a-dac2ada73d3e": {
+    "name": "DePaul Theater School",
+    "tue": [
+      "08:00",
+      "21:00"
+    ],
+    "wed": [
+      "08:00",
+      "21:00"
+    ]
+  },
+  "f38d231a-552e-487a-bba2-989a9bdac587": {
+    "name": "DePaul University Loop | 11th floor",
+    "tue": [
+      "08:00",
+      "18:00"
+    ],
+    "wed": [
+      "08:00",
+      "18:00"
+    ]
+  },
+  "27fb17ff-0ce6-4737-bf85-0f8bd517699d": {
+    "name": "Dog Haus Biergarten - Lincoln Park",
+    "tue": [
+      "06:00",
+      "02:00"
+    ],
+    "wed": [
+      "06:00",
+      "02:00"
+    ]
+  },
+  "67291e8b-4c52-446d-8267-6e646fb4fc2d": {
+    "name": "DSTRKT",
+    "tue": [
+      "16:00",
+      "02:00"
+    ],
+    "wed": [
+      "16:00",
+      "02:00"
+    ]
+  },
+  "41e6bbc2-c7d2-4fab-9176-a8b734fae27f": {
+    "name": "Emporium Fulton Market",
+    "tue": [
+      "16:00",
+      "02:00"
+    ],
+    "wed": [
+      "16:00",
+      "02:00"
+    ]
+  },
+  "e00ff9f1-b797-46be-b563-0a36c676e3dc": {
+    "name": "Emporium Wicker Park",
+    "tue": [
+      "17:00",
+      "02:00"
+    ],
+    "wed": [
+      "17:00",
+      "02:00"
+    ]
+  },
+  "77987b50-73ae-4f2f-b5de-272c80664b5a": {
+    "name": "Evergreen Social",
+    "tue": [
+      "10:30",
+      "23:00"
+    ],
+    "wed": [
+      "10:30",
+      "23:00"
+    ]
+  },
+  "eb521776-9669-479b-896e-64aa92febf66": {
+    "name": "Fireplace Inn",
+    "tue": null,
+    "wed": [
+      "16:30",
+      "00:00"
+    ]
+  },
+  "3daf64e6-b3a7-4da7-bbbb-afc753cdc1d1": {
+    "name": "George St Pub",
+    "tue": [
+      "15:00",
+      "23:00"
+    ],
+    "wed": [
+      "15:00",
+      "23:00"
+    ]
+  },
+  "9530e0ea-c2ff-4273-bca5-2c7c41b29fd3": {
+    "name": "Glascott’s Saloon",
+    "tue": [
+      "16:00",
+      "00:00"
+    ],
+    "wed": [
+      "16:00",
+      "02:00"
+    ]
+  },
+  "d9f81afc-4ab2-4f58-b178-7581a89b8877": {
+    "name": "Good Night John Boy",
+    "tue": null,
+    "wed": null
+  },
+  "e16ab823-502e-4087-b54b-6faa8b769838": {
+    "name": "Halligan Bar",
+    "tue": [
+      "17:00",
+      "01:00"
+    ],
+    "wed": [
+      "17:00",
+      "01:00"
+    ]
+  },
+  "8e06d424-a5c1-4bcf-92a1-6619622270e4": {
+    "name": "Happy Camper Old Town",
+    "tue": [
+      "11:00",
+      "00:00"
+    ],
+    "wed": [
+      "11:00",
+      "00:00"
+    ]
+  },
+  "281b3b41-b7af-49ea-86d9-57276a7a0698": {
+    "name": "Happy Camper Wrigleyville",
+    "tue": [
+      "11:00",
+      "00:00"
+    ],
+    "wed": [
+      "11:00",
+      "00:00"
+    ]
+  },
+  "7626af70-3b12-4e73-91f0-0095000c838f": {
+    "name": "Hello Jasmine",
+    "tue": [
+      "11:00",
+      "20:00"
+    ],
+    "wed": [
+      "11:00",
+      "20:00"
+    ]
+  },
+  "a5d8eb91-1efe-4c5a-874f-1687464b2ad2": {
+    "name": "Home Away From Home",
+    "tue": null,
+    "wed": null
+  },
+  "979e2719-c1c9-4eac-a0f2-182de2f91c83": {
+    "name": "Homeslice",
+    "tue": [
+      "11:00",
+      "22:00"
+    ],
+    "wed": [
+      "11:00",
+      "22:00"
+    ]
+  },
+  "dc631c57-378c-4254-96aa-5a49a2c86c7c": {
+    "name": "Hook and Ladder",
+    "tue": null,
+    "wed": [
+      "17:00",
+      "02:00"
+    ]
+  },
+  "b110a2f5-7f10-4a3c-a005-669219b1e7cb": {
+    "name": "Hubbard Inn | 1st Floor",
+    "tue": null,
+    "wed": [
+      "10:30",
+      "00:00"
+    ]
+  },
+  "513bd484-0b1c-4d4f-81b1-5d9ec9ccd9ff": {
+    "name": "Hubbard Inn | 2nd Floor",
+    "tue": null,
+    "wed": [
+      "10:30",
+      "00:00"
+    ]
+  },
+  "6c359651-b380-4893-a5ed-2d0ee99f1cf9": {
+    "name": "Ina Mae Tavern",
+    "tue": [
+      "11:00",
+      "22:00"
+    ],
+    "wed": [
+      "11:00",
+      "22:00"
+    ]
+  },
+  "e3b9d0c7-2fea-40a6-ad50-4840a9dcfe8a": {
+    "name": "Irish Eyes",
+    "tue": [
+      "17:00",
+      "02:00"
+    ],
+    "wed": [
+      "17:00",
+      "02:00"
+    ]
+  },
+  "a93ec002-4b34-429f-b4d3-743d75dddc68": {
+    "name": "Joy District | 2nd Floor",
+    "tue": null,
+    "wed": [
+      "16:00",
+      "00:00"
+    ]
+  },
+  "8e1e0410-98fa-41a8-bde7-794bd530b100": {
+    "name": "Joy District | 3rd Floor",
+    "tue": null,
+    "wed": [
+      "16:00",
+      "00:00"
+    ]
+  },
+  "46f013e8-45cc-40cb-8fce-9b352aa66c76": {
+    "name": "Kelly's Pub",
+    "tue": [
+      "15:00",
+      "02:00"
+    ],
+    "wed": [
+      "11:30",
+      "02:00"
+    ]
+  },
+  "128b8eb9-bd9c-4214-811c-ce9f35f9eda0": {
+    "name": "Kirkwood Bar",
+    "tue": [
+      "17:00",
+      "02:00"
+    ],
+    "wed": [
+      "17:00",
+      "02:00"
+    ]
+  },
+  "f733bd4c-8bf7-44b5-b573-381d4d21389e": {
+    "name": "Lottie's Pub (2)",
+    "tue": [
+      "11:00",
+      "02:00"
+    ],
+    "wed": [
+      "11:00",
+      "02:00"
+    ]
+  },
+  "59333d08-b1d1-4f60-ac32-39afb554ae93": {
+    "name": "Lottie’s Pub (1)",
+    "tue": [
+      "11:00",
+      "02:00"
+    ],
+    "wed": [
+      "11:00",
+      "02:00"
+    ]
+  },
+  "5587a200-bfe4-489e-b8f0-40e99b3fbd97": {
+    "name": "Louie’s Pub",
+    "tue": [
+      "16:00",
+      "01:30"
+    ],
+    "wed": [
+      "16:00",
+      "01:30"
+    ]
+  },
+  "e256001c-f722-4e86-867f-53d074f6073b": {
+    "name": "McNallys For Now",
+    "tue": [
+      "12:00",
+      "02:00"
+    ],
+    "wed": [
+      "12:00",
+      "02:00"
+    ]
+  },
+  "58779cfe-8070-478b-988c-1bfbe48a17ac": {
+    "name": "Olive Black",
+    "tue": [
+      "16:00",
+      "23:00"
+    ],
+    "wed": [
+      "16:00",
+      "23:00"
+    ]
+  },
+  "1ad42563-d417-4957-abb4-755b90efa52a": {
+    "name": "Open Outcry Brewing Company",
+    "tue": [
+      "11:30",
+      "22:00"
+    ],
+    "wed": [
+      "11:30",
+      "22:00"
+    ]
+  },
+  "d3657620-66ee-4af7-acf0-8427186d039f": {
+    "name": "Output Wriglyville",
+    "tue": [
+      "15:00",
+      "02:00"
+    ],
+    "wed": [
+      "16:00",
+      "02:00"
+    ]
+  },
+  "54dc9820-4128-4574-abee-7b5d52c5de95": {
+    "name": "Paradise Park",
+    "tue": [
+      "11:00",
+      "00:00"
+    ],
+    "wed": [
+      "11:00",
+      "00:00"
+    ]
+  },
+  "e39ccfeb-6e26-4269-9917-d79dc9055a34": {
+    "name": "Parlay Lincoln Park",
+    "tue": [
+      "17:00",
+      "22:00"
+    ],
+    "wed": [
+      "17:00",
+      "22:00"
+    ]
+  },
+  "6f79cf83-c127-4a05-b6c2-e07a45432d2e": {
+    "name": "Parlay River North",
+    "tue": null,
+    "wed": [
+      "16:00",
+      "00:00"
+    ]
+  },
+  "b8f791de-6a75-4d37-ba8b-12fcd8bffc36": {
+    "name": "Pilot Project Brewing",
+    "tue": [
+      "09:00",
+      "22:00"
+    ],
+    "wed": [
+      "09:00",
+      "22:00"
+    ]
+  },
+  "62408b5c-f5a1-49e3-9166-26f9cb9cdf22": {
+    "name": "Pour Decisions | 1st Floor",
+    "tue": [
+      "16:00",
+      "02:00"
+    ],
+    "wed": [
+      "16:00",
+      "02:00"
+    ]
+  },
+  "e5550d28-fbde-4f3b-ab2b-f59cdd884575": {
+    "name": "Pour Decisions | 2nd Floor",
+    "tue": [
+      "16:00",
+      "02:00"
+    ],
+    "wed": [
+      "16:00",
+      "02:00"
+    ]
+  },
+  "f6333e68-15d3-4eed-b3b6-dc9c74c97a98": {
+    "name": "Rizzo’s Bar & Inn",
+    "tue": null,
+    "wed": [
+      "16:00",
+      "01:30"
+    ]
+  },
+  "bb750a2c-a1d4-4e82-ab7d-d96ce0fa617d": {
+    "name": "Schmitt Academic Center | Elevator Entrance",
+    "tue": [
+      "07:00",
+      "22:00"
+    ],
+    "wed": [
+      "07:00",
+      "22:00"
+    ]
+  },
+  "06262ca2-9881-4a88-96ad-b89923d4b0bc": {
+    "name": "Sluggers World Class Sports Bar - Batting Cage",
+    "tue": [
+      "15:00",
+      "02:00"
+    ],
+    "wed": [
+      "15:00",
+      "02:00"
+    ]
+  },
+  "1637040d-9cd5-4778-8bd9-3f93880de72c": {
+    "name": "Sluggers World Class Sports Bar - Piano Room",
+    "tue": [
+      "15:00",
+      "02:00"
+    ],
+    "wed": [
+      "15:00",
+      "02:00"
+    ]
+  },
+  "e60e5e6d-445c-4569-9394-c91cdbd0ff86": {
+    "name": "The Leavitt St Inn & Tavern",
+    "tue": [
+      "15:00",
+      "00:00"
+    ],
+    "wed": [
+      "15:00",
+      "00:00"
+    ]
+  },
+  "d4de5ef8-3d17-4b23-be74-45aa51fb29b1": {
+    "name": "The Pony Inn",
+    "tue": [
+      "16:00",
+      "01:00"
+    ],
+    "wed": [
+      "16:00",
+      "01:00"
+    ]
+  },
+  "0f9a5f63-541c-4c1a-b038-187d8e580ddc": {
+    "name": "The Tin Lizzie",
+    "tue": [
+      "17:00",
+      "00:00"
+    ],
+    "wed": [
+      "17:00",
+      "02:00"
+    ]
+  },
+  "ea340ad1-eb95-46dc-80be-bf783aea7db1": {
+    "name": "The Vig West Loop",
+    "tue": [
+      "16:00",
+      "00:00"
+    ],
+    "wed": [
+      "16:00",
+      "00:00"
+    ]
+  },
+  "d61bf738-6619-4573-8f5d-d454548f9089": {
+    "name": "The Whistle Bar & Grill",
+    "tue": [
+      "10:00",
+      "00:00"
+    ],
+    "wed": [
+      "10:00",
+      "00:00"
+    ]
+  }
+}

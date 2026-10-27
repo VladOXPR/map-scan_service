@@ -1,0 +1,126 @@
+.root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.map {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.legend {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(20, 20, 22, 0.88);
+  color: #f5f5f5;
+  font-size: 13px;
+  line-height: 1.2;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.legendRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legendDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid #ffffff;
+  flex-shrink: 0;
+}
+
+.legendGreen {
+  background: #22c55e;
+}
+
+.legendGrey {
+  background: #d1d5db;
+}
+
+.legendFaded {
+  background: #d1d5db;
+  opacity: 0.35;
+}
+
+.legendUpdated {
+  margin-top: 2px;
+  color: #a3a3a3;
+  font-size: 11px;
+}
+
+.popup :global(.mapboxgl-popup-content) {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #141416;
+  color: #f5f5f5;
+  font-family: inherit;
+  max-width: 280px;
+  max-height: 60vh;
+  overflow-y: auto;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+
+.popup :global(.mapboxgl-popup-tip) {
+  border-top-color: #141416;
+  border-bottom-color: #141416;
+}
+
+.popup :global(.mapboxgl-popup-close-button) {
+  color: #a3a3a3;
+  font-size: 18px;
+  padding: 2px 8px;
+}
+
+.popupItem + .popupItem {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.popupTitle {
+  margin: 0 18px 6px 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.badge {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badgeOpen {
+  background: rgba(34, 197, 94, 0.18);
+  color: #4ade80;
+}
+
+.badgeClosed {
+  background: rgba(156, 163, 175, 0.18);
+  color: #d1d5db;
+}
+
+.hoursLine {
+  font-size: 13px;
+  color: #e5e5e5;
+}
+
+.note {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #a3a3a3;
+}
