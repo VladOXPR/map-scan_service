@@ -16,12 +16,12 @@ interface ProxyOptions {
   body?: string;
 }
 
-function cuubApiUrl(): string | null {
+export function cuubApiUrl(): string | null {
   const url = process.env["CUUB_API_URL"]?.trim();
   return url ? url.replace(/\/$/, "") : null;
 }
 
-function cuubApiToken(): string | null {
+export function cuubApiToken(): string | null {
   // Accept either name so copying from cuub-dashboard (.env MACHINE_API_TOKEN) works.
   const token =
     process.env["CUUB_API_TOKEN"]?.trim() ||
@@ -29,7 +29,7 @@ function cuubApiToken(): string | null {
   return token || null;
 }
 
-function parseJsonResponse(text: string): unknown {
+export function parseJsonResponse(text: string): unknown {
   try {
     return text ? JSON.parse(text) : null;
   } catch {
