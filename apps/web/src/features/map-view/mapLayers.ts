@@ -1,8 +1,8 @@
 import type mapboxgl from "mapbox-gl";
-import type { Coords } from "@cuub/shared";
-import type { StationsGeoJSON } from "./stationsToGeoJSON";
+import type { Coords, StationFeatureCollection } from "@cuub/core";
+import { CLUSTER_RADIUS, MAP_BRAND_BLUE, ROUTE_GRADIENT_STOPS } from "@cuub/core";
 
-export const MAP_BRAND_BLUE = "#0198FD";
+export { MAP_BRAND_BLUE };
 
 export const STATION_LAYER_IDS = [
   "clusters",
@@ -23,11 +23,8 @@ const ROUTE_LAYER = "cuub-nearest-route-line";
 
 const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
-const DIMMED: mapboxgl.ExpressionSpecification = [
-  "any",
-  ["==", ["get", "online"], false],
-  ["==", ["get", "inactive"], true],
-];
+export const DIMMED: mapboxgl.ExpressionSpecification = ["==", ["get", "dimmed"], 1];
+export const SELECTED: mapboxgl.ExpressionSpecification = ["==", ["get", "selected"], 1];
 
 /**
  * Clustered station source + layers. Offline and inactive pins use the same
@@ -35,7 +32,7 @@ const DIMMED: mapboxgl.ExpressionSpecification = [
  */
 export function addStationLayers(
   map: mapboxgl.Map,
-  data: StationsGeoJSON,
+  data: StationFeatureCollection,
   { highlightSelected }: { highlightSelected: boolean }
 ) {
   map.addSource("stations", {
@@ -43,7 +40,7 @@ export function addStationLayers(
     data: data as unknown as GeoJSON.FeatureCollection,
     cluster: true,
     clusterMaxZoom: 22,
-    clusterRadius: 25,
+    clusterRadius: CLUSTER_RADIUS,
   });
 
   map.addLayer({
@@ -91,7 +88,7 @@ export function addStationLayers(
     source: "stations",
     filter: ["all", ["!", ["has", "point_count"]], ["!", DIMMED]],
     paint: {
-      "circle-radius": ["case", ["get", "selected"], 14, 12],
+      "circle-radius": ["case", SELECTED, 14, 12],
       "circle-color": "#ffffff",
       "circle-stroke-width": 2,
       "circle-stroke-color": MAP_BRAND_BLUE,
@@ -116,7 +113,7 @@ export function addStationLayers(
         6, "station-icon-6",
         "station-icon-6",
       ],
-      "icon-size": highlightSelected ? ["case", ["get", "selected"], 1.2, 1] : 1,
+      "icon-size": highlightSelected ? ["case", SELECTED, 1.2, 1] : 1,
       "icon-allow-overlap": true,
       "icon-ignore-placement": true,
     },
@@ -183,10 +180,8 @@ export function addOverlayLayers(map: mapboxgl.Map) {
             "interpolate",
             ["linear"],
             ["line-progress"],
-            0, "#5EC8FF",
-            0.45, MAP_BRAND_BLUE,
-            1, "#1F68E0",
-          ],
+            ...ROUTE_GRADIENT_STOPS.flat(),
+          ] as mapboxgl.ExpressionSpecification,
         },
       },
       PUCK_PULSE_LAYER

@@ -1,5 +1,5 @@
-import type { Station } from "@cuub/shared";
-import { buildDirectionsUrl, detectWebPlatform } from "@cuub/shared";
+import type { Station } from "@cuub/core";
+import { buildDirectionsUrl, detectWebPlatform } from "@cuub/core";
 
 /** Opens the platform's maps app (maps:// on iOS, google.navigation: on Android). */
 export function openDirections(station: Station) {

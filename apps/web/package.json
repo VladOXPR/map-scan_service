@@ -6,23 +6,26 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@cuub/shared": "*",
+    "@cuub/core": "*",
+    "@cuub/theme": "*",
     "google-auth-library": "^9.15.1",
     "mapbox-gl": "^3.7.0",
-    "next": "^14.2.5",
-    "react": "18.2.0",
-    "react-dom": "18.2.0"
+    "next": "^15.5.28",
+    "posthog-js": "^1.438.13",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
     "@types/mapbox-gl": "^3.4.0",
     "@types/node": "^20.14.10",
-    "@types/react": "~18.2.79",
-    "@types/react-dom": "~18.2.25",
+    "@types/react": "~19.2.2",
+    "@types/react-dom": "~19.2.2",
     "eslint": "^8.57.0",
-    "eslint-config-next": "^14.2.5",
-    "typescript": "^5.4.5"
+    "eslint-config-next": "^15.5.28",
+    "typescript": "^5.9.3"
   }
 }

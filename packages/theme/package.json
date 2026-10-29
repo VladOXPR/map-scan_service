@@ -1,0 +1,14 @@
+{
+  "name": "@cuub/theme",
+  "version": "1.0.0",
+  "description": "CUUB design tokens shared by the app (NativeWind / StyleSheet) and the website (CSS variables).",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3"
+  }
+}

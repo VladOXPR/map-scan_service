@@ -1,8 +1,5 @@
 .env
 .env.local
-server.log
-qrStats.json
-energoToken.json
 node_modules/
 
 # Next.js
@@ -15,6 +12,8 @@ out/
 .expo/
 .expo-shared/
 dist/
+web-build/
+expo-env.d.ts
 apps/*/ios/
 apps/*/android/
 ios/Pods/

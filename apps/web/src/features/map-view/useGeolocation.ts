@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Coords } from "@cuub/shared";
+import type { Coords } from "@cuub/core";
 
 export type LocationPermission = "unknown" | "prompt" | "granted" | "denied" | "unsupported";
 

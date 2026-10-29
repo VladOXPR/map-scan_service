@@ -10,6 +10,7 @@ const RESERVED = new Set([
   "favicon.ico",
   "app",
   "sales",
+  "s",
 ]);
 
 export const dynamic = "force-dynamic";
@@ -18,10 +19,10 @@ export default async function StickerPage({
   params,
   searchParams,
 }: {
-  params: { sticker_id: string };
-  searchParams: { embed?: string };
+  params: Promise<{ sticker_id: string }>;
+  searchParams: Promise<{ embed?: string }>;
 }) {
-  const stickerId = params.sticker_id;
+  const [{ sticker_id: stickerId }, { embed }] = await Promise.all([params, searchParams]);
   if (!stickerId || RESERVED.has(stickerId) || stickerId.includes(".")) {
     notFound();
   }
@@ -30,7 +31,7 @@ export default async function StickerPage({
     <MapView
       variant="full"
       stickerId={stickerId}
-      embedMode={searchParams.embed === "1"}
+      embedMode={embed === "1"}
       initialStations={initialStations}
     />
   );

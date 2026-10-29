@@ -1,0 +1,6 @@
+{
+  "name": "@cuub/assets",
+  "version": "1.0.0",
+  "description": "Station icons, illustrations and map art shared by the app (require('@cuub/assets/...')) and the website (/assets/...).",
+  "private": true
+}

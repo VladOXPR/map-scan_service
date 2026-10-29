@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { BatteryData } from "@cuub/shared";
+import type { BatteryData } from "@cuub/core";
 import { GradientButton } from "@/components/GradientButton";
+import { trackGetApp, useStoreLink } from "@/features/app-links/useStoreLink";
 import { cuubClient } from "@/lib/cuubClient";
 import { useDurationTimer } from "./useDurationTimer";
-
-const APP_STORE_URL = "https://apps.apple.com/us/app/cuub/id6805257335";
 
 export interface ScanModalProps {
   stickerId: string;
@@ -20,6 +19,7 @@ export function ScanModal({ stickerId, onHeightChange }: ScanModalProps) {
   const [loaded, setLoaded] = useState(false);
   const [returned, setReturned] = useState(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const storeLink = useStoreLink();
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +84,7 @@ export function ScanModal({ stickerId, onHeightChange }: ScanModalProps) {
   const duration = useDurationTimer(initialDuration, showDuration && !returned);
 
   const onGetApp = () => {
+    trackGetApp(storeLink, "scan_card");
     void cuubClient
       .recordAppTap(stickerId)
       .catch((err) => console.error("Error recording app tap:", err));
@@ -109,7 +110,7 @@ export function ScanModal({ stickerId, onHeightChange }: ScanModalProps) {
           width={44}
           height={44}
         />
-        <GradientButton size="sm" label="Get the App" href={APP_STORE_URL} onClick={onGetApp} />
+        <GradientButton size="sm" label="Get the App" href={storeLink.href} onClick={onGetApp} />
       </div>
     </div>
   );

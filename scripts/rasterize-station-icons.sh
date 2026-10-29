@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Rasterize the 7 station SVG icons (assets/stations/Icon0.svg..Icon6.svg)
-# into PNG assets for the Expo mobile app at assets/stations/.
+# Rasterize the 7 station SVG icons (packages/assets/stations/Icon0.svg..Icon6.svg)
+# into PNG assets for the Expo mobile app at packages/assets/stations/.
 #
 # Why this exists:
 #   - The web app loads the SVGs directly via mapbox-gl-js' map.addImage()
@@ -26,9 +26,9 @@
 #   bash scripts/rasterize-station-icons.sh
 #
 # Output (per i in 0..6):
-#   assets/stations/icon${i}.png       (54x53)
-#   assets/stations/icon${i}@2x.png    (108x106)
-#   assets/stations/icon${i}@3x.png    (162x159)
+#   packages/assets/stations/icon${i}.png       (54x53)
+#   packages/assets/stations/icon${i}@2x.png    (108x106)
+#   packages/assets/stations/icon${i}@3x.png    (162x159)
 
 set -euo pipefail
 
@@ -38,8 +38,8 @@ if ! command -v magick >/dev/null 2>&1; then
 fi
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SVG_DIR="$REPO_ROOT/assets/stations"
-OUT_DIR="$REPO_ROOT/assets/stations"
+SVG_DIR="$REPO_ROOT/packages/assets/stations"
+OUT_DIR="$REPO_ROOT/packages/assets/stations"
 TMP_DIR="$(mktemp -d -t cuub-svg-patched.XXXXXX)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 

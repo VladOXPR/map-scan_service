@@ -1,4 +1,4 @@
-import type { Station } from "@cuub/shared";
+import type { Station } from "@cuub/core";
 import { fetchMapStations } from "./cuubApi";
 
 // Map pins from cuub-api GET /map (DB only). Keep HTTP cache short in the route handler.

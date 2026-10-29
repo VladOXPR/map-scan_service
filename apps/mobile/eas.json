@@ -1,0 +1,54 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_CUUB_API_URL": "https://platform.cuub.tech"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_CUUB_API_URL": "https://platform.cuub.tech"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_CUUB_API_URL": "https://platform.cuub.tech",
+        "EXPO_PUBLIC_PRIVACY_POLICY_URL": "https://cuub.tech/privacypolicy",
+        "EXPO_PUBLIC_SUPPORT_URL": "https://cuub.tech/contact",
+        "EXPO_PUBLIC_TERMS_URL": "https://cuub.tech/termsandconditions"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "vlad.valchkou@cuub.tech",
+        "ascAppId": "6805257335",
+        "appleTeamId": "8X4H3BPTXL"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
+  }
+}

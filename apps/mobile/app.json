@@ -1,45 +1,121 @@
 {
   "expo": {
     "name": "CUUB",
-    "slug": "cuub-mobile",
+    "slug": "cuub-user-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
+    "icon": "./App_Icon.png",
     "scheme": "cuub",
-    "newArchEnabled": false,
+    "userInterfaceStyle": "dark",
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "tech.cuub.mobile",
+      "supportsTablet": false,
+      "bundleIdentifier": "tech.cuub.user",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "CUUB uses your location to find the nearest station."
-      }
+        "NSLocationWhenInUseUsageDescription": "CUUB uses your location to show nearby battery stations and alert you when your phone battery is low and a station is close by.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": [
+          "processing",
+          "remote-notification"
+        ],
+        "BGTaskSchedulerPermittedIdentifiers": [
+          "com.expo.modules.backgroundtask.processing"
+        ]
+      },
+      "associatedDomains": [
+        "applinks:go.cuub.tech"
+      ],
+      "appleTeamId": "8X4H3BPTXL"
     },
     "android": {
-      "package": "tech.cuub.mobile",
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+      "adaptiveIcon": {
+        "backgroundColor": "#000000",
+        "foregroundImage": "./App_Icon.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.cuub.user",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "go.cuub.tech",
+              "pathPrefix": "/s/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
+      "favicon": "./assets/branding/favicon.png",
       "bundler": "metro"
     },
     "plugins": [
       "expo-router",
+      "expo-secure-store",
+      "expo-font",
       [
-        "@rnmapbox/maps",
+        "expo-splash-screen",
         {
-          "RNMapboxMapsImpl": "mapbox"
+          "backgroundColor": "#161616",
+          "image": "./assets/branding/splash_icon.png"
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "CUUB uses your location to find the nearest station."
+          "locationWhenInUsePermission": "CUUB uses your location to show nearby battery stations and alert you when your phone battery is low and a station is close by."
         }
-      ]
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./App_Icon.png",
+          "color": "#0198FD",
+          "defaultChannel": "low-battery"
+        }
+      ],
+      "@rnmapbox/maps",
+      "expo-background-task",
+      "expo-localization",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.tech.cuub.user",
+          "enableGooglePay": true
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "CUUB uses the camera to scan the QR code on a station so you can unlock a battery.",
+          "recordAudioAndroid": false
+        }
+      ],
+      "@react-native-community/datetimepicker"
     ],
+    "experiments": {
+      "typedRoutes": true
+    },
     "extra": {
-      "router": { "origin": false },
-      "cuubApiBase": "",
-      "mapboxAccessToken": ""
-    }
+      "eas": {
+        "projectId": "c8e8797e-0a9e-4564-882b-49a6f2e6f528"
+      },
+      "router": {}
+    },
+    "owner": "cuub"
   }
 }
