@@ -23,11 +23,23 @@ export function isThreeDigits(value: unknown): value is string {
   return typeof value === "string" && /^\d{3}$/.test(value);
 }
 
-export function checkCrawlPassword(password: unknown): boolean {
-  if (typeof password !== "string") return false;
-  const expected = process.env["CRAWL_PASSWORD"]?.trim() || "crawl";
+/** `"cooldown"` access is limited to one dispense per device per CRAWL_COOLDOWN_MS; `"unlimited"` is not. */
+export type CrawlAccess = "cooldown" | "unlimited";
+
+function passwordMatches(password: string, expected: string): boolean {
   const digest = (value: string) => createHash("sha256").update(value.trim().toLowerCase()).digest();
-  return timingSafeEqual(digest(password), digest(expected.toLowerCase()));
+  return timingSafeEqual(digest(password), digest(expected));
+}
+
+export function checkCrawlPassword(password: unknown): CrawlAccess | null {
+  if (typeof password !== "string") return null;
+  const standard = process.env["CRAWL_PASSWORD"]?.trim() || "crawl";
+  const unlimited = process.env["CRAWL_UNLIMITED_PASSWORD"]?.trim() || "vladsucks";
+  // Both comparisons always run so timing doesn't reveal which password matched.
+  const isStandard = passwordMatches(password, standard);
+  const isUnlimited = passwordMatches(password, unlimited);
+  if (isUnlimited) return "unlimited";
+  return isStandard ? "cooldown" : null;
 }
 
 async function callCuubApi(path: string, method: "GET" | "POST") {

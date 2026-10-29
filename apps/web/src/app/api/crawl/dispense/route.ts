@@ -23,12 +23,13 @@ export async function POST(req: NextRequest) {
   if (!isThreeDigits(body?.digits) || typeof body?.stationId !== "string") {
     return NextResponse.json({ success: false, error: "Please start over." }, { status: 400 });
   }
-  if (!checkCrawlPassword(body.password)) {
+  const access = checkCrawlPassword(body.password);
+  if (!access) {
     return NextResponse.json({ success: false, error: "That password isn't right." }, { status: 401 });
   }
 
   const ip = clientIp(req.headers);
-  if (isCoolingDown(ip, req.cookies.has(CRAWL_COOKIE))) {
+  if (access === "cooldown" && isCoolingDown(ip, req.cookies.has(CRAWL_COOKIE))) {
     return NextResponse.json(
       { success: false, error: "You've already grabbed a free power bank. Please try again in an hour." },
       { status: 429 },
@@ -42,8 +43,10 @@ export async function POST(req: NextRequest) {
     }
 
     await freeDispense(body.stationId);
-    recordDispense(ip);
     const res = NextResponse.json({ success: true });
+    if (access === "unlimited") return res;
+
+    recordDispense(ip);
     res.cookies.set(CRAWL_COOKIE, "1", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
