@@ -1,13 +1,4 @@
-import {
-  mapFoundationStations,
-  mapInactiveLocations,
-  mapMapLocations,
-  mergeStationsWithInactive,
-  type FoundationStationRow,
-  type LocationRow,
-  type MapLocationRow,
-  type Station,
-} from "@cuub/core";
+import { mapMapLocations, type MapLocationRow, type Station } from "@cuub/core";
 
 interface ProxyOptions {
   path: string;
@@ -37,90 +28,31 @@ export function parseJsonResponse(text: string): unknown {
   }
 }
 
-/** Public GET /map pins only — no live slot/online data. Active venues only. */
-async function fetchPublicMapStations(
-  baseUrl: string
-): Promise<{ status: number; payload: unknown; stations: Station[] }> {
-  const res = await fetch(`${baseUrl}/map`, {
-    method: "GET",
+/** Must match the CUUB app map (apps/mobile/src/features/stations/api.ts): live first, then plain pins. */
+const MAP_SOURCES = [
+  // Live counts come from Energo through cuub-api; a stalled call must not hold the page render.
+  { path: "/map/live", timeoutMs: 10_000 },
+  { path: "/map", timeoutMs: null },
+] as const;
+
+async function fetchMapLocations(
+  baseUrl: string,
+  path: string,
+  timeoutMs: number | null
+): Promise<Station[] | null> {
+  const res = await fetch(`${baseUrl}${path}`, {
     headers: { Accept: "application/json" },
     cache: "no-store",
+    signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
   });
-
   const text = await res.text();
   const json = parseJsonResponse(text) as { success?: boolean; data?: MapLocationRow[] } | null;
-  if (!res.ok || !json?.success || !Array.isArray(json.data)) {
-    return {
-      status: res.ok ? 502 : res.status,
-      payload: {
-        success: false,
-        error: "Failed to fetch map locations from cuub-api",
-      },
-      stations: [],
-    };
-  }
-
-  const mapped = mapMapLocations(json.data);
-  return {
-    status: 200,
-    payload: { success: true, data: mapped, count: mapped.length },
-    stations: mapped,
-  };
+  if (res.ok && json?.success && Array.isArray(json.data)) return mapMapLocations(json.data);
+  console.warn(`[stations] GET ${path} failed:`, res.status, text.slice(0, 200));
+  return null;
 }
 
-/**
- * Machine-auth inactive venues (no station required). Inventory excluded via query.
- */
-async function fetchInactiveLocationPins(
-  baseUrl: string,
-  token: string
-): Promise<Station[]> {
-  try {
-    const path = "/locations?status=INACTIVE&is_inventory=false&limit=200";
-    const res = await fetch(`${baseUrl}${path}`, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      cache: "no-store",
-    });
-    const text = await res.text();
-    const json = parseJsonResponse(text) as {
-      success?: boolean;
-      data?: LocationRow[];
-    } | null;
-    if (!res.ok || !json?.success || !Array.isArray(json.data)) {
-      console.warn(
-        "[stations] inactive locations fetch failed:",
-        res.status,
-        text.slice(0, 200)
-      );
-      return [];
-    }
-    return mapInactiveLocations(json.data);
-  } catch (err) {
-    console.warn("[stations] inactive locations network error:", err);
-    return [];
-  }
-}
-
-function stationsPayload(stations: Station[]) {
-  return {
-    status: 200,
-    payload: { success: true, data: stations, count: stations.length },
-  };
-}
-
-/** Live Energo enrichment must finish within this window or we use public GET /map. */
-const LIVE_STATIONS_TIMEOUT_MS = 2000;
-
-/**
- * Prefer live Energo enrichment via machine-auth stations list (same path as
- * dashboard). Always merge inactive (non-inventory) locations when auth is
- * available. Fall back to public GET /map pins if the live call fails or does
- * not respond within LIVE_STATIONS_TIMEOUT_MS.
- */
+/** Public GET /map/live (pins with live online and battery counts), falling back to GET /map. */
 export async function fetchMapStations(): Promise<{ status: number; payload: unknown }> {
   const baseUrl = cuubApiUrl();
   if (!baseUrl) {
@@ -130,64 +62,21 @@ export async function fetchMapStations(): Promise<{ status: number; payload: unk
     };
   }
 
-  const token = cuubApiToken();
-  const inactivePins = token
-    ? await fetchInactiveLocationPins(baseUrl, token)
-    : [];
-
-  if (token) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), LIVE_STATIONS_TIMEOUT_MS);
+  for (const { path, timeoutMs } of MAP_SOURCES) {
     try {
-      // Same query shape as cuub-dashboard fetchAllStations({ includeLive: true }).
-      // is_inventory=false keeps inventory cabinets off the map.
-      const path =
-        "/stations?include_live=true&is_inventory=false&limit=200";
-      const res = await fetch(`${baseUrl}${path}`, {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        cache: "no-store",
-        signal: controller.signal,
-      });
-
-      const text = await res.text();
-      const json = parseJsonResponse(text) as {
-        success?: boolean;
-        data?: FoundationStationRow[];
-      } | null;
-
-      if (res.ok && json?.success && Array.isArray(json.data)) {
-        const live = mapFoundationStations(json.data);
-        if (live.length > 0 || inactivePins.length > 0) {
-          return stationsPayload(mergeStationsWithInactive(live, inactivePins));
-        }
-        console.warn(
-          "[stations] live include_live returned 0 mappable stations; falling back to GET /map"
-        );
-      } else {
-        console.warn(
-          "[stations] live include_live fetch failed; falling back to GET /map:",
-          res.status,
-          text.slice(0, 200)
-        );
+      const stations = await fetchMapLocations(baseUrl, path, timeoutMs);
+      if (stations) {
+        return { status: 200, payload: { success: true, data: stations, count: stations.length } };
       }
     } catch (err) {
-      console.warn("[stations] live include_live network error; falling back to GET /map:", err);
-    } finally {
-      clearTimeout(timeout);
+      console.warn(`[stations] GET ${path} network error:`, err);
     }
   }
 
-  const publicMap = await fetchPublicMapStations(baseUrl);
-  if (publicMap.status !== 200) {
-    if (inactivePins.length > 0) return stationsPayload(inactivePins);
-    return { status: publicMap.status, payload: publicMap.payload };
-  }
-
-  return stationsPayload(mergeStationsWithInactive(publicMap.stations, inactivePins));
+  return {
+    status: 502,
+    payload: { success: false, error: "Failed to fetch map locations from cuub-api" },
+  };
 }
 
 export interface StationLandingData {

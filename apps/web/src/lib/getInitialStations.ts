@@ -1,7 +1,7 @@
 import type { Station } from "@cuub/core";
 import { fetchMapStations } from "./cuubApi";
 
-// Map pins from cuub-api GET /map (DB only). Keep HTTP cache short in the route handler.
+// Map pins from cuub-api GET /map/live, like the CUUB app. Keep HTTP cache short in the route handler.
 export const STATIONS_REVALIDATE_SECONDS = 60;
 
 export async function getStationsResult() {
