@@ -11,9 +11,11 @@ export interface ScanModalProps {
   stickerId: string;
   /** Rendered height of the card (0 while hidden), for laying out map chrome below it. */
   onHeightChange?: (px: number) => void;
+  /** Hide the CUUB logo and "Get the App" button; the card then only shows Duration. */
+  hideAppCta?: boolean;
 }
 
-export function ScanModal({ stickerId, onHeightChange }: ScanModalProps) {
+export function ScanModal({ stickerId, onHeightChange, hideAppCta = false }: ScanModalProps) {
   const [open, setOpen] = useState(false);
   const [battery, setBattery] = useState<BatteryData | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -90,7 +92,7 @@ export function ScanModal({ stickerId, onHeightChange }: ScanModalProps) {
       .catch((err) => console.error("Error recording app tap:", err));
   };
 
-  if (!visible) return null;
+  if (!visible || (hideAppCta && !showDuration)) return null;
 
   return (
     <div ref={cardRef} className={`scan-card${showDuration ? "" : " scan-card--promo"}`}>
@@ -102,16 +104,18 @@ export function ScanModal({ stickerId, onHeightChange }: ScanModalProps) {
           </div>
         </div>
       )}
-      <div className="scan-card-cta">
-        <img
-          className="scan-card-logo"
-          src="/assets/applogo.png"
-          alt="CUUB"
-          width={44}
-          height={44}
-        />
-        <GradientButton size="sm" label="Get the App" href={storeLink.href} onClick={onGetApp} />
-      </div>
+      {!hideAppCta && (
+        <div className="scan-card-cta">
+          <img
+            className="scan-card-logo"
+            src="/assets/applogo.png"
+            alt="CUUB"
+            width={44}
+            height={44}
+          />
+          <GradientButton size="sm" label="Get the App" href={storeLink.href} onClick={onGetApp} />
+        </div>
+      )}
     </div>
   );
 }

@@ -15,6 +15,7 @@ import {
 } from "@cuub/core";
 import { cuubClient } from "@/lib/cuubClient";
 import { AppPromptModal } from "@/features/app-prompt/AppPromptModal";
+import { CRAWL_PROMO_ACTIVE, CrawlAd } from "@/features/crawl-ad/CrawlAd";
 import { ScanModal } from "@/features/scan/ScanModal";
 import { loadStationIcons } from "./loadStationIcons";
 import {
@@ -110,7 +111,9 @@ export function MapView({
   /** Pin highlight — cleared as soon as the sheet starts closing. */
   const [pinSelectedId, setPinSelectedId] = useState<Station["id"] | null>(null);
   const [sheetHeight, setSheetHeight] = useState(0);
-  const [scanHeight, setScanHeight] = useState(0);
+  /** Height of the top stack (crawl ad + scan card), 0 when nothing is shown. */
+  const [topHeight, setTopHeight] = useState(0);
+  const topStackRef = useRef<HTMLDivElement | null>(null);
   const [locationSheet, setLocationSheet] = useState<LocationAction | null>(null);
   const [locationRequesting, setLocationRequesting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -122,8 +125,8 @@ export function MapView({
   stationsRef.current = stations;
   const coordsRef = useRef(coords);
   coordsRef.current = coords;
-  const scanHeightRef = useRef(scanHeight);
-  scanHeightRef.current = scanHeight;
+  const topHeightRef = useRef(topHeight);
+  topHeightRef.current = topHeight;
   const safeTopRef = useRef(0);
   const introPlayedRef = useRef(false);
   const introTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -214,7 +217,7 @@ export function MapView({
   }, []);
 
   const topInset = useCallback(
-    () => Math.max(scanHeightRef.current, safeTopRef.current),
+    () => Math.max(topHeightRef.current, safeTopRef.current),
     []
   );
 
@@ -585,6 +588,22 @@ export function MapView({
     return c ? formatMiles(distanceMiles(coords, c)) : null;
   }, [coords, nearestStation]);
 
+  const showCrawlAd = CRAWL_PROMO_ACTIVE && full && !embedMode;
+  const showTopStack = showCrawlAd || !!stickerId;
+
+  useEffect(() => {
+    const el = topStackRef.current;
+    if (!showTopStack || !el) {
+      setTopHeight(0);
+      return;
+    }
+    const report = () => setTopHeight(el.offsetHeight);
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [showTopStack]);
+
   const showSupport = full && !sheetOpen;
   const showDock = !embedMode && !sheetOpen;
   const ctrlBottom = sheetOpen
@@ -600,12 +619,17 @@ export function MapView({
     >
       <div ref={containerRef} className="cuub-map" id="map" />
 
-      {stickerId && <ScanModal stickerId={stickerId} onHeightChange={setScanHeight} />}
+      {showTopStack && (
+        <div ref={topStackRef} className="cuub-top-stack">
+          {showCrawlAd && <CrawlAd />}
+          {stickerId && <ScanModal stickerId={stickerId} hideAppCta={showCrawlAd} />}
+        </div>
+      )}
 
       {showSupport && (
         <SupportButton
           onClick={onSupport}
-          style={scanHeight > 0 ? { top: scanHeight + 12 } : undefined}
+          style={topHeight > 0 ? { top: topHeight + 12 } : undefined}
         />
       )}
 
