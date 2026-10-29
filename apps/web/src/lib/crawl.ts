@@ -10,7 +10,7 @@ type StationRow = {
   stationId?: string;
   manufactureId?: string;
   status?: string;
-  currentLocation?: { title?: string; isInventory?: boolean; status?: string } | null;
+  currentLocation?: { title?: string; status?: string } | null;
 };
 
 export class CrawlError extends Error {
@@ -45,12 +45,9 @@ async function callCuubApi(path: string, method: "GET" | "POST") {
   return { status: res.status, json };
 }
 
-/** Deployed, non-inventory stations whose ID ends with `digits`. */
+/** Stations at a non-archived location (inventory included) whose ID ends with `digits`. */
 export async function findStationsBySuffix(digits: string): Promise<CrawlMatch[]> {
-  const { status, json } = await callCuubApi(
-    `/stations?is_inventory=false&q=${encodeURIComponent(digits)}&limit=200`,
-    "GET",
-  );
+  const { status, json } = await callCuubApi(`/stations?q=${encodeURIComponent(digits)}&limit=200`, "GET");
   if (status !== 200 || !json?.success || !Array.isArray(json.data)) {
     console.error("[crawl] station lookup failed:", status, json?.error);
     throw new CrawlError("We couldn't look up stations right now. Please try again.", 502);
@@ -60,8 +57,7 @@ export async function findStationsBySuffix(digits: string): Promise<CrawlMatch[]
     .filter((row) => row.stationId && row.manufactureId?.endsWith(digits))
     .filter((row) => {
       const location = row.currentLocation;
-      if (!location || location.isInventory === true) return false;
-      return String(location.status ?? "").toUpperCase() !== "ARCHIVED";
+      return location != null && String(location.status ?? "").toUpperCase() !== "ARCHIVED";
     })
     .map((row) => ({ stationId: row.stationId!, title: row.currentLocation?.title?.trim() || row.manufactureId! }));
 }

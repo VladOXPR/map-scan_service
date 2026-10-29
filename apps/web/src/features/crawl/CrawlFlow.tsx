@@ -124,7 +124,7 @@ export function CrawlFlow() {
             <label className={styles.field}>
               <span className={styles.label}>Input password given to you.</span>
               <input
-                className={styles.input}
+                className={`${styles.input} ${styles.password}`}
                 type="password"
                 autoCapitalize="none"
                 autoCorrect="off"
