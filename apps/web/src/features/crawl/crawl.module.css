@@ -1,0 +1,155 @@
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  padding: calc(var(--cuub-safe-top) + 24px) 20px max(var(--cuub-safe-bottom), 24px);
+  background-color: #000;
+}
+
+.card {
+  width: 100%;
+  max-width: var(--cuub-column);
+}
+
+.form,
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.section {
+  padding-top: 15vh;
+  text-align: center;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
+}
+
+.title {
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 700;
+}
+
+.subtitle {
+  color: var(--cuub-muted);
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.station {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+  margin: 0 auto;
+  pointer-events: none;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.label {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 500;
+}
+
+.input {
+  width: 100%;
+  min-height: 56px;
+  padding: 0 16px;
+  border: 1px solid var(--cuub-panel-border);
+  border-radius: 14px;
+  outline: none;
+  background-color: var(--cuub-panel-bg);
+  color: #fff;
+  font-family: inherit;
+  font-size: 18px;
+}
+
+.input:focus {
+  border-color: var(--cuub-brand-blue);
+}
+
+.digits {
+  text-align: center;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.4em;
+  font-variant-numeric: tabular-nums;
+}
+
+.digits::placeholder {
+  color: #3f3f46;
+}
+
+.error {
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 120, 120, 0.35);
+  border-radius: 12px;
+  background-color: rgba(255, 80, 80, 0.08);
+  color: #ffb4b4;
+  font-size: 15px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.question {
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 700;
+}
+
+.location {
+  color: var(--cuub-brand-blue);
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 700;
+}
+
+.note {
+  color: var(--cuub-muted);
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.secondary {
+  width: 100%;
+  min-height: 56px;
+  border: 1px solid var(--cuub-border);
+  border-radius: 18px;
+  background-color: var(--cuub-panel-bg);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 150ms ease-out;
+}
+
+.secondary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.secondary:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
