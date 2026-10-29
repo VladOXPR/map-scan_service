@@ -8,3 +8,4 @@ export * from './Card';
 export * from './LoadingState';
 export * from './EmptyState';
 export * from './Screen';
+export * from './MembershipChip';

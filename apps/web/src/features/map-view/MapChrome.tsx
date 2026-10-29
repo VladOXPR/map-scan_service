@@ -3,6 +3,7 @@
 import { useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { DistancePill } from "@/components/DistancePill";
 import { GradientButton } from "@/components/GradientButton";
+import { trackGetApp, useStoreLink } from "@/features/app-links/useStoreLink";
 
 export function SupportButton({ onClick, style }: { onClick: () => void; style?: CSSProperties }) {
   return (
@@ -21,11 +22,13 @@ export interface BottomDockProps {
 
 /**
  * "Nearest location" bar pinned to the bottom with the blue locate button
- * floating above its right edge. Swiping up on the bar also finds the nearest.
+ * floating above its right edge and "Get the app" above its left edge.
+ * Swiping up on the bar also finds the nearest.
  */
 export function BottomDock({ onNearest, onLocate, distanceLabel, locationShared }: BottomDockProps) {
   const swipeRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const swipedRef = useRef(false);
+  const storeLink = useStoreLink();
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     swipeRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
@@ -49,6 +52,15 @@ export function BottomDock({ onNearest, onLocate, distanceLabel, locationShared 
 
   return (
     <div className="cuub-bottom-dock">
+      <a
+        className="cuub-get-app-btn"
+        href={storeLink.href}
+        rel="noopener noreferrer"
+        onClick={() => trackGetApp(storeLink, "dock")}
+      >
+        <img src="/assets/applogo.png" alt="" width={22} height={22} />
+        Get the app
+      </a>
       <button
         type="button"
         className="cuub-locate-btn"

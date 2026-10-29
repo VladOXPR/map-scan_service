@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@cuub/shared"],
+  transpilePackages: ["@cuub/core", "@cuub/theme"],
   async headers() {
     return [
       {

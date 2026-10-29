@@ -7,8 +7,11 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import type { ReactNode } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PostHogMaskView } from 'posthog-react-native';
 import { Button, Text } from '@/components/ui';
+import { tracker } from '@/lib/analytics';
 import {
   getPrivacyPolicyUrl,
   getSupportUrl,
@@ -19,23 +22,32 @@ import { colors, radius, spacing } from '@/theme';
 type AccountModalProps = {
   visible: boolean;
   phone: string;
+  name?: string | null;
   signedIn?: boolean;
+  profileComplete?: boolean;
   deleting?: boolean;
+  /** Membership section, rendered under the account details when signed in. */
+  membership?: ReactNode;
   onClose: () => void;
   onLogin: () => void;
   onLogout: () => void;
   onDeleteAccount: () => void;
+  onCompleteProfile?: () => void;
 };
 
 export function AccountModal({
   visible,
   phone,
+  name,
   signedIn = false,
+  profileComplete = true,
   deleting = false,
+  membership,
   onClose,
   onLogin,
   onLogout,
   onDeleteAccount,
+  onCompleteProfile,
 }: AccountModalProps) {
   const insets = useSafeAreaInsets();
 
@@ -54,7 +66,8 @@ export function AccountModal({
     );
   };
 
-  const openUrl = (url: string) => {
+  const openUrl = (url: string, event: 'privacy_opened' | 'terms_opened' | 'support_sms_tapped') => {
+    tracker.track(event, { entry: 'account' });
     void Linking.openURL(url);
   };
 
@@ -88,12 +101,25 @@ export function AccountModal({
 
           <View style={styles.content}>
             {signedIn ? (
-              <>
+              <PostHogMaskView style={styles.details}>
+                {name ? <Text style={styles.phone}>{name}</Text> : null}
                 <Text muted style={styles.label}>
-                  Your phone number
+                  {name ? 'Phone number' : 'Your phone number'}
                 </Text>
-                <Text style={styles.phone}>{phone || '—'}</Text>
-              </>
+                <Text style={name ? styles.secondary : styles.phone}>{phone || '—'}</Text>
+                {!profileComplete && onCompleteProfile ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={onCompleteProfile}
+                    style={styles.profileRow}
+                  >
+                    <Text variant="subtitle">Complete your profile</Text>
+                    <Text variant="caption" muted>
+                      Add your name and date of birth to unlock power banks.
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </PostHogMaskView>
             ) : (
               <>
                 <Text muted style={styles.label}>
@@ -102,11 +128,12 @@ export function AccountModal({
                 <Text style={styles.phone}>Log in with your number</Text>
               </>
             )}
+            {signedIn && membership ? <View style={styles.membership}>{membership}</View> : null}
           </View>
 
           <View style={styles.actions}>
             <View style={styles.legalRow}>
-              <Pressable onPress={() => openUrl(getPrivacyPolicyUrl())}>
+              <Pressable onPress={() => openUrl(getPrivacyPolicyUrl(), 'privacy_opened')}>
                 <Text variant="caption" muted>
                   Privacy Policy
                 </Text>
@@ -114,7 +141,7 @@ export function AccountModal({
               <Text variant="caption" muted>
                 ·
               </Text>
-              <Pressable onPress={() => openUrl(getTermsUrl())}>
+              <Pressable onPress={() => openUrl(getTermsUrl(), 'terms_opened')}>
                 <Text variant="caption" muted>
                   Terms
                 </Text>
@@ -122,7 +149,7 @@ export function AccountModal({
               <Text variant="caption" muted>
                 ·
               </Text>
-              <Pressable onPress={() => openUrl(getSupportUrl())}>
+              <Pressable onPress={() => openUrl(getSupportUrl(), 'support_sms_tapped')}>
                 <Text variant="caption" muted>
                   Support
                 </Text>
@@ -202,6 +229,26 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 34,
     fontWeight: '700',
+  },
+  secondary: {
+    color: colors.white,
+    fontSize: 17,
+    lineHeight: 24,
+  },
+  details: {
+    gap: spacing[2],
+  },
+  profileRow: {
+    marginTop: spacing[4],
+    padding: spacing[4],
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    gap: spacing[1],
+  },
+  membership: {
+    marginTop: spacing[5],
   },
   legalRow: {
     flexDirection: 'row',

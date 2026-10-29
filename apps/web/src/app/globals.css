@@ -83,7 +83,7 @@ button {
   padding: 0 20px;
   border: 2px solid #49b6ff;
   border-radius: 18px;
-  background: linear-gradient(90deg, #22b0f6, #1f68e0) padding-box;
+  background: linear-gradient(90deg, var(--cuub-cta-from), var(--cuub-cta-to)) padding-box;
   color: #fff;
   font-size: 17px;
   line-height: 22px;
@@ -340,6 +340,34 @@ button {
   transform: scale(0.96);
 }
 
+.cuub-get-app-btn {
+  position: absolute;
+  left: 20px;
+  bottom: calc(100% + 12px);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 16px 0 11px;
+  border: 1px solid var(--cuub-border);
+  border-radius: 999px;
+  background-color: var(--cuub-panel-bg);
+  color: #fff;
+  font-size: 15px;
+  line-height: 18px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform 150ms ease-out;
+}
+
+.cuub-get-app-btn img {
+  border-radius: 6px;
+}
+
+.cuub-get-app-btn:active {
+  transform: scale(0.96);
+}
+
 .cuub-locate-arrow {
   width: 19px;
   height: 19px;
@@ -570,6 +598,162 @@ button {
   height: 44px;
   border-radius: 10px;
   display: block;
+}
+
+/* /s/<code> station landing (QR target without the app) */
+.station-landing {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  background: radial-gradient(120% 60% at 50% 0%, rgba(31, 104, 224, 0.28), transparent 70%), #000;
+}
+
+.station-landing-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: var(--cuub-column);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: calc(var(--cuub-safe-top) + 28px) 20px calc(max(var(--cuub-safe-bottom), 16px) + 12px);
+}
+
+.station-landing-logo {
+  align-self: center;
+  border-radius: 14px;
+}
+
+.station-landing-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--cuub-border);
+  border-radius: 24px;
+  background-color: var(--cuub-panel-bg);
+}
+
+.station-landing-illu {
+  flex-shrink: 0;
+  width: 84px;
+  height: auto;
+  object-fit: contain;
+}
+
+.station-landing-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.station-landing-title {
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 700;
+}
+
+.station-landing-address {
+  color: var(--cuub-muted);
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.station-landing-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.station-landing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.station-landing-status--ok {
+  color: var(--cuub-success);
+}
+
+.station-landing-status--muted {
+  color: var(--cuub-muted);
+}
+
+.station-landing-status--off {
+  color: var(--cuub-danger);
+}
+
+.station-landing-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 4px;
+  list-style: none;
+  counter-reset: step;
+}
+
+.station-landing-steps li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+  line-height: 22px;
+  counter-increment: step;
+}
+
+.station-landing-steps li::before {
+  content: counter(step);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, var(--cuub-cta-from), var(--cuub-cta-to));
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.station-landing-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: auto;
+}
+
+.station-landing-secondary {
+  align-self: center;
+  color: #fff;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.station-landing-hint {
+  color: var(--cuub-muted);
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.station-landing-hint a {
+  color: #fff;
+}
+
+.station-landing-code {
+  color: var(--cuub-muted);
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
+  letter-spacing: 0.04em;
 }
 
 /* "Return anywhere" splash */

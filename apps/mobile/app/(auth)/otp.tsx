@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PostHogMaskView } from 'posthog-react-native';
 import { OtpInput, Text } from '@/components/ui';
 import {
   OTP_LENGTH,
@@ -16,6 +17,8 @@ import {
   shouldShowNewUserWelcome,
   verifySmsCode,
 } from '@/features/auth/api';
+import { afterAuthHref, phoneHref, profileHref, safeNext } from '@/features/auth/routes';
+import { tracker } from '@/lib/analytics';
 import { ApiError } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/authStore';
 import { useWelcomeStore } from '@/store/welcomeStore';
@@ -26,11 +29,12 @@ const DIDNT_GET_CODE_DELAY_SEC = 10;
 export default function OtpScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ phone?: string }>();
+  const params = useLocalSearchParams<{ phone?: string; next?: string }>();
   const phone = useMemo(
     () => (Array.isArray(params.phone) ? params.phone[0] : params.phone) ?? '',
     [params.phone],
   );
+  const next = safeNext(params.next);
   const setSession = useAuthStore((s) => s.setSession);
   const armWelcome = useWelcomeStore((s) => s.arm);
 
@@ -64,13 +68,22 @@ export default function OtpScreen() {
     setError(undefined);
     try {
       const result = await verifySmsCode(phone, nextCode);
+      tracker.track('otp_verified', { isNewUser: result.isNewUser });
       await setSession({ token: result.token, user: result.user });
       // New signup / re-register after delete → "Welcome to CUUB".
       // Existing returning account → "Welcome back".
       const showNew = await shouldShowNewUserWelcome(phone, result.isNewUser);
       armWelcome(showNew ? 'new' : 'back');
-      router.replace('/(app)');
+      // Existing phone-only accounts see the profile step here too.
+      router.replace(
+        result.user.profileComplete
+          ? afterAuthHref(next)
+          : profileHref({ trigger: 'signup', next }),
+      );
     } catch (err) {
+      tracker.track('otp_failed', {
+        reason: err instanceof ApiError ? err.code ?? `http_${err.status}` : 'network',
+      });
       setError(authErrorMessage(err, 'Verification failed'));
       setCode('');
       if (
@@ -98,7 +111,12 @@ export default function OtpScreen() {
   };
 
   const onSendAnother = () => {
-    router.replace('/(auth)/phone');
+    router.replace(phoneHref({ entry: 'resend', next }));
+  };
+
+  const onClose = () => {
+    tracker.track('login_abandoned', { step: 'otp' });
+    router.replace('/(app)');
   };
 
   return (
@@ -106,7 +124,7 @@ export default function OtpScreen() {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Close"
-        onPress={() => router.replace('/(app)')}
+        onPress={onClose}
         style={[styles.closeButton, { top: insets.top + spacing[2] }]}
         hitSlop={8}
       >
@@ -117,12 +135,14 @@ export default function OtpScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.center}>
-          <OtpInput
-            value={code}
-            onChange={onChangeCode}
-            length={OTP_LENGTH}
-            error={error}
-          />
+          <PostHogMaskView>
+            <OtpInput
+              value={code}
+              onChange={onChangeCode}
+              length={OTP_LENGTH}
+              error={error}
+            />
+          </PostHogMaskView>
 
           {loading ? (
             <ActivityIndicator color="#BBBBBB" style={styles.spinner} />

@@ -12,9 +12,9 @@ import { formatDistance, distanceMiles } from '@/lib/distance';
 import type { Coordinates, Station } from '@/types/station';
 import { colors, radius, spacing } from '@/theme';
 
-const stationIcon = require('../../../assets/illustrations/Station.png');
-const stationHeroStand = require('../../../assets/illustrations/Station_on_stand.png');
-const stationHeroTall = require('../../../assets/illustrations/Tall.png');
+const stationIcon = require('@cuub/assets/illustrations/Station.png');
+const stationHeroStand = require('@cuub/assets/illustrations/Station_on_stand.png');
+const stationHeroTall = require('@cuub/assets/illustrations/Tall.png');
 
 type StationBottomSheetProps = {
   station: Station | null;

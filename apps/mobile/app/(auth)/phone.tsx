@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -20,6 +20,9 @@ import {
   normalizePhone,
   requestSmsCode,
 } from '@/features/auth/api';
+import { safeNext } from '@/features/auth/routes';
+import { tracker } from '@/lib/analytics';
+import { ApiError } from '@/lib/apiClient';
 import { getPrivacyPolicyUrl, getTermsUrl } from '@/lib/config';
 import { colors, spacing } from '@/theme';
 
@@ -38,6 +41,7 @@ type FormValues = z.infer<typeof schema>;
 
 export default function PhoneScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ entry?: string; next?: string }>();
   const insets = useSafeAreaInsets();
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -48,25 +52,41 @@ export default function PhoneScreen() {
   });
 
   const goToOtp = (phone: string) => {
+    const next = safeNext(params.next);
     router.push({
       pathname: '/(auth)/otp',
-      params: { phone },
+      params: { phone, ...(next ? { next } : {}) },
     });
   };
+
+  useEffect(() => {
+    tracker.track('phone_viewed', { entry: typeof params.entry === 'string' ? params.entry : 'direct' });
+    tracker.track('login_started');
+  }, [params.entry]);
 
   const onSubmit = handleSubmit(async ({ phone }) => {
     setSubmitting(true);
     setFormError(null);
     try {
       const result = await requestSmsCode(phone);
+      tracker.track('otp_requested', { resend: false });
       const nextPhone = result.phone || normalizePhone(phone);
       goToOtp(nextPhone);
     } catch (error) {
+      tracker.track('otp_request_failed', {
+        status: error instanceof ApiError ? error.status : 0,
+        errorCode: error instanceof ApiError ? error.code : undefined,
+      });
       setFormError(authErrorMessage(error, 'Couldn’t send a verification code'));
     } finally {
       setSubmitting(false);
     }
   });
+
+  const onClose = () => {
+    tracker.track('login_abandoned', { step: 'phone' });
+    router.replace('/(app)');
+  };
 
   return (
     <View style={styles.root}>
@@ -80,7 +100,7 @@ export default function PhoneScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close"
-            onPress={() => router.replace('/(app)')}
+            onPress={onClose}
             style={[styles.closeButton, { top: insets.top + spacing[2] }]}
             hitSlop={8}
           >
@@ -144,6 +164,7 @@ export default function PhoneScreen() {
                 variant="caption"
                 color={colors.primary}
                 onPress={() => {
+                  tracker.track('terms_opened', { entry: 'phone' });
                   void Linking.openURL(getTermsUrl());
                 }}
               >
@@ -154,6 +175,7 @@ export default function PhoneScreen() {
                 variant="caption"
                 color={colors.primary}
                 onPress={() => {
+                  tracker.track('privacy_opened', { entry: 'phone' });
                   void Linking.openURL(getPrivacyPolicyUrl());
                 }}
               >

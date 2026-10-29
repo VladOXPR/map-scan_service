@@ -18,7 +18,7 @@ import { configureMapbox, getMapboxTokenStatus } from '@/lib/mapbox';
 import { fetchWalkingRoute } from '@/features/map/fetchWalkingRoute';
 import { lineStringToGradientSegments } from '@/features/map/routeGradient';
 import { map as mapTokens, colors } from '@/theme';
-import { stationsToGeoJSON } from '@/features/stations/stationsToGeoJSON';
+import { stationsToGeoJSON } from '@cuub/core';
 import { MAP_BRAND_BLUE, STATION_ICONS } from './stationIcons';
 import { StationMarker } from './StationMarker';
 import { Text } from '@/components/ui';
@@ -295,7 +295,7 @@ export function StationMap({
   /** True after the initial center-on-user frame (zoom-out may still be pending). */
   const introCenteredRef = useRef(false);
   /** Live camera — used so locate/pan stops don't let Mapbox invent zoom/heading/pitch. */
-  const liveCameraRef = useRef({
+  const liveCameraRef = useRef<{ zoom: number; heading: number }>({
     zoom: mapTokens.defaultZoom,
     heading: 0,
   });

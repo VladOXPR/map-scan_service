@@ -3,6 +3,7 @@ import * as Battery from 'expo-battery';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { fetchNearbyStations } from '@/features/stations/api';
+import { tracker } from '@/lib/analytics';
 import { distanceMiles } from '@/lib/distance';
 import { getItem, setItem } from '@/lib/storage';
 import type { Station } from '@/types/station';
@@ -41,6 +42,7 @@ export async function ensureNotificationPermissions(): Promise<boolean> {
     return true;
   }
 
+  tracker.permission('notifications', 'prompted');
   const requested = await Notifications.requestPermissionsAsync({
     ios: {
       allowAlert: true,
@@ -49,11 +51,14 @@ export async function ensureNotificationPermissions(): Promise<boolean> {
     },
   });
 
-  return (
+  const granted =
     requested.granted === true ||
     requested.status === 'granted' ||
-    requested.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL
-  );
+    requested.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
+  const result = granted ? 'granted' : requested.canAskAgain === false ? 'blocked' : 'denied';
+  tracker.permission('notifications', 'result', result);
+  tracker.track('notification_permission_result', { result });
+  return granted;
 }
 
 function isEligibleStation(station: Station) {
@@ -130,6 +135,7 @@ async function presentLowBatteryNotification(opts: {
     },
     trigger: null,
   });
+  tracker.track('low_battery_alert_shown', { miles: Number(distanceLabel) });
 }
 
 /**

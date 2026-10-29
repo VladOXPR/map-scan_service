@@ -3,6 +3,8 @@ import { Stack } from 'expo-router';
 import { registerLowBatteryBackgroundTask } from '@/features/alerts/backgroundLowBatteryTask';
 import { syncExpoPushToken } from '@/features/alerts/registerExpoPushToken';
 import { useLowBatteryAlerts } from '@/features/alerts/useLowBatteryAlerts';
+import { usePushNavigation } from '@/features/alerts/usePushNavigation';
+import { useBilling } from '@/features/billing/hooks';
 import { useAuthStore } from '@/store/authStore';
 import { LoadingState } from '@/components/ui';
 import { colors } from '@/theme';
@@ -12,6 +14,9 @@ export default function AppLayout() {
   const session = useAuthStore((s) => s.session);
 
   useLowBatteryAlerts(Boolean(hydrated && session));
+  // Keeps the analytics membership context current on every screen.
+  useBilling();
+  usePushNavigation();
 
   useEffect(() => {
     if (!hydrated || !session?.token) return;
@@ -32,6 +37,17 @@ export default function AppLayout() {
         contentStyle: { backgroundColor: colors.bg },
         animation: 'fade',
       }}
-    />
+    >
+      <Stack.Screen name="index" />
+      <Stack.Screen name="s/[code]" options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen
+        name="scan"
+        options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="membership"
+        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+      />
+    </Stack>
   );
 }

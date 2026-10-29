@@ -21,6 +21,9 @@
           "com.expo.modules.backgroundtask.processing"
         ]
       },
+      "associatedDomains": [
+        "applinks:go.cuub.tech"
+      ],
       "appleTeamId": "8X4H3BPTXL"
     },
     "android": {
@@ -31,6 +34,23 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "package": "com.cuub.user",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "go.cuub.tech",
+              "pathPrefix": "/s/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
@@ -69,7 +89,23 @@
         }
       ],
       "@rnmapbox/maps",
-      "expo-background-task"
+      "expo-background-task",
+      "expo-localization",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.tech.cuub.user",
+          "enableGooglePay": true
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "CUUB uses the camera to scan the QR code on a station so you can unlock a battery.",
+          "recordAudioAndroid": false
+        }
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

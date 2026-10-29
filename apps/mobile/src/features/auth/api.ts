@@ -1,3 +1,4 @@
+import { analyticsLoginContext } from '@/lib/analytics';
 import { apiDelete, apiGet, apiPost, apiPut, ApiError } from '@/lib/apiClient';
 import { getItem, removeItem, setItem } from '@/lib/storage';
 import type { AppUser, AuthSession, LoginResult } from '@/types/auth';
@@ -58,17 +59,25 @@ export function assertValidPhone(phone: string): string {
   return normalized;
 }
 
+export function toAppUser(data: Partial<AppUser> & { userId: string; phone: string }): AppUser {
+  return {
+    userId: data.userId,
+    phone: data.phone,
+    notifsEnabled: Boolean(data.notifsEnabled),
+    firstName: data.firstName ?? null,
+    lastName: data.lastName ?? null,
+    dateOfBirth: data.dateOfBirth ?? null,
+    profileComplete: Boolean(data.profileComplete),
+  };
+}
+
 function toLoginResult(data: LoginResponse): LoginResult {
   if (!data?.token || !data.user?.userId) {
     throw new Error('Login response was incomplete.');
   }
   return {
     token: data.token,
-    user: {
-      userId: data.user.userId,
-      phone: data.user.phone,
-      notifsEnabled: Boolean(data.user.notifsEnabled),
-    },
+    user: toAppUser(data.user),
     isNewUser: Boolean(data.isNewUser),
   };
 }
@@ -97,9 +106,12 @@ export async function verifySmsCode(
     throw new Error('Enter the verification code from your text message.');
   }
 
+  // Links this install (and its anonymous history) to the account in the same call.
+  const device = await analyticsLoginContext().catch(() => ({}));
   const { data } = await apiPost<LoginResponse>('/app/auth/verify-otp', {
     phone: normalized,
     code: trimmedCode,
+    ...device,
   });
   return toLoginResult(data);
 }
@@ -110,11 +122,35 @@ export async function fetchCurrentUser(token: string): Promise<AppUser> {
   if (!data?.userId) {
     throw new Error('Profile response was incomplete.');
   }
-  return {
-    userId: data.userId,
-    phone: data.phone,
-    notifsEnabled: Boolean(data.notifsEnabled),
-  };
+  return toAppUser(data);
+}
+
+export type ProfileInput = {
+  firstName: string;
+  lastName: string;
+  /** YYYY-MM-DD. */
+  dateOfBirth: string;
+};
+
+/** Registration step after OTP; the server refuses anyone under 13 (code UNDER_MINIMUM_AGE). */
+export async function updateProfile(token: string, input: ProfileInput): Promise<AppUser> {
+  const { data } = await apiPut<AppUser>('/app/me/profile', input, { token });
+  if (!data?.userId) throw new Error('Profile response was incomplete.');
+  return toAppUser(data);
+}
+
+export function profileErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.code === 'UNDER_MINIMUM_AGE') return 'You must be at least 13 to use CUUB.';
+    if (error.code === 'INVALID_DATE_OF_BIRTH') return 'Check your date of birth.';
+    if (error.code === 'INVALID_NAME') return error.message || 'Check your name.';
+  }
+  return authErrorMessage(error, 'Couldn’t save your profile. Try again.');
+}
+
+/** Ends this install's link to the account so later anonymous use is not attributed to it. */
+export async function logoutDevice(token: string, deviceId: string | null): Promise<void> {
+  await apiPost<unknown>('/app/auth/logout', { deviceId: deviceId ?? undefined }, { token });
 }
 
 /**

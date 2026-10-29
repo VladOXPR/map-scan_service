@@ -1,7 +1,7 @@
 {
-  "name": "cuub-monorepo",
+  "name": "cuub-app",
   "version": "1.0.0",
-  "description": "CUUB monorepo: Next.js web + Expo React Native mobile + shared packages",
+  "description": "CUUB consumer apps: Expo iOS/Android app, Next.js website, shared packages",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -14,18 +14,12 @@
     "mobile:start": "npm run start --workspace=@cuub/mobile",
     "mobile:ios": "npm run ios --workspace=@cuub/mobile",
     "mobile:android": "npm run android --workspace=@cuub/mobile",
-    "shared:build": "npm run build --workspace=@cuub/shared",
-    "shared:dev": "npm run dev --workspace=@cuub/shared",
-    "shared:test": "npm run test --workspace=@cuub/shared",
-    "smoke": "bash scripts/smoke-api-parity.sh",
-    "legacy:start": "node server.js",
-    "postinstall": "patch-package"
+    "core:test": "npm run test --workspace=@cuub/core",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "smoke": "bash scripts/smoke-api-parity.sh"
   },
-  "dependencies": {
-    "dotenv": "^16.4.5",
-    "express": "^4.21.2"
-  },
-  "devDependencies": {
-    "patch-package": "^8.0.0"
+  "overrides": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
   }
 }

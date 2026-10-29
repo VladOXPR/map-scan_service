@@ -1,6 +1,6 @@
 import { apiGet, ApiError } from '@/lib/apiClient';
 import type { Station } from '@/types/station';
-import { mapMapLocations } from './mappers';
+import { mapMapLocations } from '@cuub/core';
 
 function mapPins(data: unknown): Station[] {
   if (!Array.isArray(data)) return [];

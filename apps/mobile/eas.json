@@ -43,6 +43,11 @@
         "appleId": "vlad.valchkou@cuub.tech",
         "ascAppId": "6805257335",
         "appleTeamId": "8X4H3BPTXL"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "internal",
+        "releaseStatus": "draft"
       }
     }
   }

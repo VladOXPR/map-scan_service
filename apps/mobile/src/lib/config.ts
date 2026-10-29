@@ -28,7 +28,39 @@ export function getSupportPhoneE164() {
   );
 }
 
+const DEFAULT_LINK_HOST = 'go.cuub.tech';
+
+/**
+ * Hosts whose `/s/<code>` links the app accepts (kiosk QR, universal links).
+ * Must match the QR host, the AASA / assetlinks files and associatedDomains.
+ */
+export function getLinkHosts(): string[] {
+  const raw: string | undefined = process.env.EXPO_PUBLIC_LINK_HOSTS?.trim();
+  if (!raw) return [DEFAULT_LINK_HOST];
+  return raw
+    .split(',')
+    .map((host: string) => host.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** Origin used to build station links shared from the app. */
+export function getLinkOrigin(): string {
+  return `https://${getLinkHosts()[0]}`;
+}
+
 /** Terms of use linked at signup. */
 export function getTermsUrl() {
   return process.env.EXPO_PUBLIC_TERMS_URL?.trim() || DEFAULT_TERMS_URL;
+}
+
+/** Stripe publishable key; memberships are disabled in the UI when unset. */
+export function getStripePublishableKey(): string | null {
+  return process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim() || null;
+}
+
+export const STRIPE_MERCHANT_IDENTIFIER = 'merchant.tech.cuub.user';
+
+/** Shown by Apple Pay on recurring payments as the place to manage the membership. */
+export function getMembershipManageUrl() {
+  return process.env.EXPO_PUBLIC_MEMBERSHIP_MANAGE_URL?.trim() || getSupportUrl();
 }

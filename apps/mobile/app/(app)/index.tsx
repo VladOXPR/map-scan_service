@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, StyleSheet, View } from 'react-native';
 import BottomSheet from '@gorhom/bottom-sheet';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { StationMap } from '@/components/map/StationMap';
 import type { CameraFitRequest } from '@/components/map/StationMap';
 import { StationBottomSheet } from '@/components/sheets/StationBottomSheet';
@@ -14,17 +14,23 @@ import {
   EnableLocationButton,
   FindChargerBar,
   ProfileButton,
+  ScanButton,
   SupportButton,
 } from '@/components/overlays/MapChrome';
+import { ActiveRentalCard, ACTIVE_RENTAL_CARD_SPACE } from '@/components/overlays/ActiveRentalCard';
+import { useActiveRental } from '@/features/rentals/hooks';
 import { EmptyState, LoadingState, Text } from '@/components/ui';
 import {
   authErrorMessage,
   deleteAccount,
   markPhoneDeleted,
 } from '@/features/auth/api';
+import { membershipPath, profileHref } from '@/features/auth/routes';
+import { MembershipSection } from '@/features/billing/MembershipSection';
 import { isAuthFailure } from '@/lib/apiClient';
 import { useNearbyStations } from '@/features/stations/hooks';
 import { useLocationPermission } from '@/features/location/hooks';
+import { tracker } from '@/lib/analytics';
 import { getSupportPhoneE164 } from '@/lib/config';
 import { useAuthStore } from '@/store/authStore';
 import { useAccountPromptStore } from '@/store/accountPromptStore';
@@ -64,6 +70,7 @@ export default function HomeScreen() {
     refetch,
     isFetching,
   } = useNearbyStations();
+  const { data: activeRental } = useActiveRental();
   const {
     permission,
     coords,
@@ -79,6 +86,27 @@ export default function HomeScreen() {
   const setSheetIndex = useMapStore((s) => s.setSheetIndex);
 
   const sheetOpen = sheetIndex >= 0;
+  const mapLoadTrackedRef = useRef(false);
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (isError) {
+      tracker.track('map_load_failed');
+      mapLoadTrackedRef.current = false;
+      return;
+    }
+    if (mapLoadTrackedRef.current) return;
+    mapLoadTrackedRef.current = true;
+    tracker.track('map_loaded', { stations: stations.length });
+  }, [isLoading, isError, stations.length]);
+
+  useEffect(() => {
+    if (locationSheetOpen) tracker.track('location_sheet_shown');
+  }, [locationSheetOpen]);
+
+  useEffect(() => {
+    if (accountPromptOpen) tracker.track('account_prompt_shown');
+  }, [accountPromptOpen]);
 
   useEffect(() => {
     if (!welcomePending) return;
@@ -169,6 +197,15 @@ export default function HomeScreen() {
       station: Station,
       options?: { cameraFit?: CameraFitRequest | null },
     ) => {
+      tracker.track(
+        station.locationInactive ? 'inactive_station_viewed' : 'station_sheet_opened',
+        {
+          entry: options && 'cameraFit' in options ? 'nearest' : 'pin',
+          batteriesAvailable: station.batteriesAvailable,
+          online: station.online ?? null,
+        },
+        { locationId: station.locationId },
+      );
       // Sheet first — identical path for map MarkerView + Nearest button.
       sheetRef.current?.snapToIndex(0);
       selectStation(station);
@@ -233,6 +270,7 @@ export default function HomeScreen() {
     (index: number) => {
       setSheetIndex(index);
       if (index < 0) {
+        if (useMapStore.getState().selectedStation) tracker.track('station_sheet_closed');
         setCameraFit(null);
         setPinSelectedId(null);
         clearSelection();
@@ -252,7 +290,11 @@ export default function HomeScreen() {
   }, [coords, nearestStation]);
 
   const onFindNearest = () => {
-    if (!nearestStation) return;
+    if (!nearestStation) {
+      tracker.track('find_nearest_blocked', { reason: stations.length ? 'none_online' : 'no_stations' });
+      return;
+    }
+    tracker.track('find_nearest_tapped', { locationShared: permission === 'granted' });
     cameraFitToken.current += 1;
     const to: Coordinates = {
       latitude: nearestStation.latitude,
@@ -268,6 +310,7 @@ export default function HomeScreen() {
   };
 
   const onLocatePress = () => {
+    tracker.track('locate_me_tapped', { locationShared: permission === 'granted' });
     if (permission !== 'granted') {
       void openLocationSheet();
       return;
@@ -284,6 +327,7 @@ export default function HomeScreen() {
   };
 
   const onContinueLocation = async () => {
+    tracker.track('location_permission_continue');
     setLocationRequesting(true);
     try {
       await requestPermission();
@@ -294,6 +338,7 @@ export default function HomeScreen() {
   };
 
   const onSupport = () => {
+    tracker.track('support_sms_tapped', { entry: 'map' });
     const phone = getSupportPhoneE164();
     void Linking.openURL(
       `sms:${phone}&body=${encodeURIComponent(
@@ -304,18 +349,25 @@ export default function HomeScreen() {
 
   const onLogin = () => {
     setAccountOpen(false);
-    router.push('/(auth)/phone');
+    router.push({ pathname: '/(auth)/phone', params: { entry: 'account' } });
   };
 
   const onAccountPromptCreate = () => {
+    tracker.track('account_prompt_create');
     setAccountPromptOpen(false);
     void dismissAccountPrompt();
-    router.push('/(auth)/phone');
+    router.push({ pathname: '/(auth)/phone', params: { entry: 'account_prompt' } });
   };
 
   const onAccountPromptNotNow = () => {
+    tracker.track('account_prompt_dismissed');
     setAccountPromptOpen(false);
     void dismissAccountPrompt();
+  };
+
+  const onOpenAccount = () => {
+    tracker.track('account_opened', { signedIn: Boolean(session) });
+    setAccountOpen(true);
   };
 
   const onLogout = async () => {
@@ -333,18 +385,19 @@ export default function HomeScreen() {
     setDeletingAccount(true);
     try {
       await deleteAccount(token);
+      tracker.track('account_deleted');
       if (phone) {
         await markPhoneDeleted(phone);
       }
       setAccountOpen(false);
-      await signOut();
+      await signOut({ accountDeleted: true });
     } catch (error) {
       if (isAuthFailure(error)) {
         if (phone) {
           await markPhoneDeleted(phone);
         }
         setAccountOpen(false);
-        await signOut();
+        await signOut({ accountDeleted: true });
         return;
       }
       Alert.alert(
@@ -361,11 +414,19 @@ export default function HomeScreen() {
 
   const onPrimaryAction = (station: Station) => {
     const url = `https://maps.apple.com/?daddr=${station.latitude},${station.longitude}`;
+    const where = { locationId: station.locationId };
+    tracker.track('directions_tapped', {}, where);
     Alert.alert(station.name, 'Open directions to this station?', [
-      { text: 'Not now', style: 'cancel' },
+      {
+        text: 'Not now',
+        style: 'cancel',
+        onPress: () => tracker.track('directions_cancelled', {}, where),
+      },
       {
         text: 'Open Maps',
         onPress: () => {
+          tracker.track('directions_confirmed', {}, where);
+          tracker.markConverted();
           void Linking.openURL(url);
         },
       },
@@ -383,6 +444,7 @@ export default function HomeScreen() {
         description="Check your connection and try again."
         actionLabel={isFetching ? 'Loading…' : 'Retry'}
         onAction={() => {
+          tracker.track('map_retry_tapped');
           void refetch();
         }}
       />
@@ -391,6 +453,8 @@ export default function HomeScreen() {
 
   const showEmptyStations = !isLoading && !isError && stations.length === 0;
   const locationShared = permission === 'granted';
+  const rentalCard = session && activeRental ? activeRental : null;
+  const controlsRaise = rentalCard ? ACTIVE_RENTAL_CARD_SPACE : 0;
   // Don't run the map intro under the welcome overlay — play it after.
   const introEnabled = !welcomeVisible && welcomePending == null;
 
@@ -432,10 +496,16 @@ export default function HomeScreen() {
 
       {!sheetOpen ? (
         <>
-          <ProfileButton onPress={() => setAccountOpen(true)} />
+          <ProfileButton onPress={onOpenAccount} />
+          {rentalCard ? <ActiveRentalCard rental={rentalCard} /> : null}
+          <ScanButton
+            raise={controlsRaise}
+            onPress={() => router.push({ pathname: '/scan', params: { entry: 'map' } })}
+          />
           <EnableLocationButton
             locationShared={locationShared}
             onPress={onLocatePress}
+            raise={controlsRaise}
           />
           <SupportButton onPress={onSupport} />
           <FindChargerBar
@@ -469,6 +539,28 @@ export default function HomeScreen() {
         visible={accountOpen}
         signedIn={Boolean(session)}
         phone={session?.user.phone ?? ''}
+        name={
+          session?.user.firstName
+            ? `${session.user.firstName} ${session.user.lastName ?? ''}`.trim()
+            : null
+        }
+        profileComplete={session?.user.profileComplete ?? true}
+        onCompleteProfile={() => {
+          setAccountOpen(false);
+          router.push(profileHref({ trigger: 'account' }));
+        }}
+        membership={
+          <MembershipSection
+            onBecomeMember={() => {
+              setAccountOpen(false);
+              router.push(
+                (session?.user.profileComplete
+                  ? membershipPath({ trigger: 'account' })
+                  : profileHref({ trigger: 'account', next: membershipPath({ trigger: 'account' }) })) as Href,
+              );
+            }}
+          />
+        }
         deleting={deletingAccount}
         onClose={() => setAccountOpen(false)}
         onLogin={onLogin}

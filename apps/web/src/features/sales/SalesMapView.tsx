@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type mapboxgl from "mapbox-gl";
-import type { Station } from "@cuub/shared";
+import type { Station } from "@cuub/core";
+import { MAP_STYLE_URL, stationsToGeoJSON } from "@cuub/core";
 import { cuubClient } from "@/lib/cuubClient";
-import { stationsToGeoJSON } from "@/features/map-view/stationsToGeoJSON";
 import { loadStationIcons } from "@/features/map-view/loadStationIcons";
+import { addStationLayers } from "@/features/map-view/mapLayers";
 import { StationSheet } from "@/features/map-view/StationSheet";
 import { nearestStations, type RankedStation } from "./nearestStations";
 
@@ -66,7 +67,7 @@ export function SalesMapView({ initialStations = [] }: SalesMapViewProps) {
       if (!containerRef.current) return;
       const instance = new mb.Map({
         container: containerRef.current,
-        style: "mapbox://styles/mapbox/dark-v11",
+        style: MAP_STYLE_URL,
         center: [-87.65, 41.9295],
         zoom: 13.5,
         bearing: 0,
@@ -121,131 +122,7 @@ export function SalesMapView({ initialStations = [] }: SalesMapViewProps) {
         return;
       }
 
-      map.addSource("stations", {
-        type: "geojson",
-        data: geojson as unknown as GeoJSON.FeatureCollection,
-        cluster: true,
-        clusterMaxZoom: 22,
-        clusterRadius: 25,
-      });
-
-      map.addLayer({
-        id: "clusters",
-        type: "circle",
-        source: "stations",
-        filter: ["has", "point_count"],
-        paint: {
-          "circle-color": "#0198FD",
-          "circle-radius": [
-            "step",
-            ["get", "point_count"],
-            15,
-            3,
-            20,
-            5,
-            25,
-          ],
-          "circle-stroke-width": 3,
-          "circle-stroke-color": "#ffffff",
-          "circle-radius-transition": { duration: 0, delay: 0 },
-        },
-      });
-
-      map.addLayer({
-        id: "cluster-count",
-        type: "symbol",
-        source: "stations",
-        filter: ["has", "point_count"],
-        layout: {
-          "text-field": ["to-string", ["get", "point_count"]],
-          "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"],
-          "text-size": ["step", ["get", "point_count"], 14, 10, 16, 30, 18],
-          "text-allow-overlap": true,
-          "text-ignore-placement": true,
-        },
-        paint: { "text-color": "#ffffff" },
-      });
-
-      map.addLayer({
-        id: "unclustered-circle",
-        type: "circle",
-        source: "stations",
-        filter: ["!", ["has", "point_count"]],
-        paint: {
-          "circle-radius": ["case", ["get", "selected"], 14, 12],
-          "circle-color": "#ffffff",
-          "circle-stroke-width": 2,
-          "circle-stroke-color": "#0198FD",
-          "circle-opacity": [
-            "case",
-            [
-              "any",
-              ["==", ["get", "online"], false],
-              ["==", ["get", "inactive"], true],
-            ],
-            0,
-            1,
-          ],
-          "circle-stroke-opacity": [
-            "case",
-            [
-              "any",
-              ["==", ["get", "online"], false],
-              ["==", ["get", "inactive"], true],
-            ],
-            0,
-            1,
-          ],
-        },
-      });
-
-      map.addLayer({
-        id: "unclustered-point",
-        type: "symbol",
-        source: "stations",
-        filter: ["!", ["has", "point_count"]],
-        layout: {
-          "icon-image": [
-            "match",
-            ["min", 6, ["to-number", ["coalesce", ["get", "filled_slots"], 6]]],
-            0,
-            "station-icon-0",
-            1,
-            "station-icon-1",
-            2,
-            "station-icon-2",
-            3,
-            "station-icon-3",
-            4,
-            "station-icon-4",
-            5,
-            "station-icon-5",
-            6,
-            "station-icon-6",
-            "station-icon-6",
-          ] as unknown as string,
-          "icon-size": [
-            "case",
-            ["get", "selected"],
-            1.2,
-            1,
-          ] as unknown as number,
-          "icon-allow-overlap": true,
-          "icon-ignore-placement": true,
-        },
-        paint: {
-          "icon-opacity": [
-            "case",
-            [
-              "any",
-              ["==", ["get", "online"], false],
-              ["==", ["get", "inactive"], true],
-            ],
-            0.4,
-            1,
-          ],
-        },
-      });
+      addStationLayers(map, geojson, { highlightSelected: true });
 
       const onClusterClick = (e: mapboxgl.MapLayerMouseEvent) => {
         const features = map.queryRenderedFeatures(e.point, {
@@ -437,7 +314,7 @@ export function SalesMapView({ initialStations = [] }: SalesMapViewProps) {
               onClick={() => selectNearbyStation(station)}
             >
               <span className="sales-nearby-title">
-                {station.title || "CUUB Station"}
+                {station.name || "CUUB Station"}
               </span>
               <span className="sales-nearby-distance">
                 {formatMiles(distanceMeters)}

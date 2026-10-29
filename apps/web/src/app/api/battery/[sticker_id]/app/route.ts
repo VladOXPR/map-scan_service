@@ -4,14 +4,15 @@ import { proxyCuubBattery } from "@/lib/cuubApi";
 export const dynamic = "force-dynamic";
 
 interface RouteContext {
-  params: { sticker_id: string };
+  params: Promise<{ sticker_id: string }>;
 }
 
 /** Marks the latest scan visit as an App Store / Get App tap. */
 export async function POST(_req: NextRequest, { params }: RouteContext) {
   try {
+    const { sticker_id } = await params;
     const { status, payload } = await proxyCuubBattery({
-      path: `/battery/${encodeURIComponent(params.sticker_id)}/app`,
+      path: `/battery/${encodeURIComponent(sticker_id)}/app`,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ app: true }),

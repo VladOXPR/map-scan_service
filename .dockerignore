@@ -17,9 +17,6 @@ coverage
 **/.expo
 **/.expo-shared
 **/dist
-apps/mobile/ios
-apps/mobile/android
 
-# Legacy assets we don't ship to Cloud Run
-tt_hoves_pro
-DEPLOYMENT.md
+# The Cloud Run image only builds the website
+apps/mobile

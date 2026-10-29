@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { AppState, Linking } from 'react-native';
 import * as Location from 'expo-location';
+import { tracker } from '@/lib/analytics';
 import { useLocationStore } from '@/store/locationStore';
 
 type PermissionStatus = 'undetermined' | 'granted' | 'denied';
@@ -75,10 +76,14 @@ export function useLocationPermission() {
       return { status: 'denied' as PermissionStatus, canAskAgain: false };
     }
 
+    tracker.permission('location', 'prompted');
     const result = await Location.requestForegroundPermissionsAsync();
     await setPrompted(true);
     const status = toStatus(result.status);
     setPermission(status);
+    const outcome = status === 'denied' && result.canAskAgain === false ? 'blocked' : status;
+    tracker.permission('location', 'result', outcome);
+    tracker.track('location_permission_result', { result: outcome });
 
     if (status === 'granted') {
       const next = await readPosition();

@@ -1,12 +1,11 @@
 "use client";
 
-import type { Coords, Station } from "@cuub/shared";
+import type { Coords, Station } from "@cuub/core";
+import { distanceMiles, formatMiles, getStationDetails } from "@cuub/core";
 import { BottomSheet } from "@/components/BottomSheet";
 import { DistancePill } from "@/components/DistancePill";
 import { GradientButton } from "@/components/GradientButton";
-import { distanceMiles, formatMiles } from "./distance";
 import { openDirections } from "./directions";
-import { getStationDetails } from "./stationDetails";
 
 export interface StationSheetProps {
   /** Kept by the parent until `onClosed` so content stays during the slide-out. */
@@ -40,14 +39,14 @@ export function StationSheet({
       onRequestClose={onRequestClose}
       onClosed={onClosed}
       onVisibleHeightChange={onVisibleHeightChange}
-      label={station?.title || "CUUB Station"}
+      label={station?.name || "CUUB Station"}
       className="station-sheet"
     >
       {station && details && (
         <div className="station-sheet-body">
           <div className="station-sheet-header">
             <div className="station-sheet-title-row">
-              <h2 className="station-sheet-title">{station.title || "CUUB Station"}</h2>
+              <h2 className="station-sheet-title">{station.name || "CUUB Station"}</h2>
               {!details.unavailable && <DistancePill label={distanceLabel} />}
             </div>
             <div className="station-sheet-divider" />

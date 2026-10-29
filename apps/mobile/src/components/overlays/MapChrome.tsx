@@ -12,12 +12,12 @@ import { GradientButton } from '@/components/ui/GradientButton';
 import { colors, motion, radius, spacing } from '@/theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-const stationIcon = require('../../../assets/illustrations/Station.png');
-const locationArrowIcon = require('../../../assets/map/location-arrow.png');
-const locationArrowUnsharedIcon = require('../../../assets/map/location-arrow-unshared.png');
+const stationIcon = require('@cuub/assets/illustrations/Station.png');
+const locationArrowIcon = require('@cuub/assets/map/location-arrow.png');
+const locationArrowUnsharedIcon = require('@cuub/assets/map/location-arrow-unshared.png');
 
 /** Height of the nearest-location bar above the screen bottom (padding + button). */
-function nearestBarHeight(bottomInset: number) {
+export function nearestBarHeight(bottomInset: number) {
   const barBottomPad = Math.max(bottomInset, spacing[4]);
   const button = 56 + 4;
   return spacing[4] + button + barBottomPad;
@@ -61,12 +61,15 @@ export function ProfileButton({ onPress }: ProfileButtonProps) {
 type EnableLocationButtonProps = {
   onPress: () => void;
   locationShared?: boolean;
+  /** Extra lift when the active-rental card sits above the bar. */
+  raise?: number;
 };
 
 /** Blue locate control — above Nearest location. Icon reflects share state. */
 export function EnableLocationButton({
   onPress,
   locationShared = false,
+  raise = 0,
 }: EnableLocationButtonProps) {
   const insets = useSafeAreaInsets();
   const scale = useSharedValue(1);
@@ -81,7 +84,7 @@ export function EnableLocationButton({
         styles.locationWrap,
         {
           right: spacing[5],
-          bottom: nearestBarHeight(insets.bottom) + spacing[3],
+          bottom: nearestBarHeight(insets.bottom) + spacing[3] + raise,
         },
       ]}
     >
@@ -107,6 +110,47 @@ export function EnableLocationButton({
             locationShared ? styles.locateArrow : styles.locateArrowUnshared
           }
         />
+      </AnimatedPressable>
+    </View>
+  );
+}
+
+/** Scan a station QR — mirrors the locate control on the left. */
+export function ScanButton({ onPress, raise = 0 }: { onPress: () => void; raise?: number }) {
+  const insets = useSafeAreaInsets();
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <View
+      pointerEvents="box-none"
+      style={[
+        styles.locationWrap,
+        { left: spacing[5], bottom: nearestBarHeight(insets.bottom) + spacing[3] + raise },
+      ]}
+    >
+      <AnimatedPressable
+        accessibilityRole="button"
+        accessibilityLabel="Scan a station to unlock"
+        onPress={onPress}
+        onPressIn={() => {
+          scale.value = withTiming(0.96, { duration: motion.fast });
+        }}
+        onPressOut={() => {
+          scale.value = withTiming(1, { duration: motion.fast });
+        }}
+        style={[styles.scanButton, animatedStyle]}
+      >
+        <View style={styles.scanGlyph}>
+          <View style={[styles.scanCorner, { top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2 }]} />
+          <View style={[styles.scanCorner, { top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2 }]} />
+          <View style={[styles.scanCorner, { bottom: 0, left: 0, borderBottomWidth: 2, borderLeftWidth: 2 }]} />
+          <View style={[styles.scanCorner, { bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2 }]} />
+          <View style={styles.scanLine} />
+        </View>
+        <Text style={styles.scanLabel}>Scan</Text>
       </AnimatedPressable>
     </View>
   );
@@ -268,6 +312,40 @@ const styles = StyleSheet.create({
     height: 20,
     resizeMode: 'contain',
     tintColor: colors.white,
+  },
+  scanButton: {
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#161616',
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
+  },
+  scanGlyph: {
+    width: 18,
+    height: 18,
+    justifyContent: 'center',
+  },
+  scanCorner: {
+    position: 'absolute',
+    width: 6,
+    height: 6,
+    borderColor: colors.white,
+  },
+  scanLine: {
+    height: 2,
+    marginHorizontal: 3,
+    backgroundColor: colors.white,
+    borderRadius: 1,
+  },
+  scanLabel: {
+    color: colors.white,
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: '600',
   },
   supportWrap: {
     position: 'absolute',

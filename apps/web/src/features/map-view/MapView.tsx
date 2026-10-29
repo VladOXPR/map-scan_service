@@ -2,12 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type mapboxgl from "mapbox-gl";
-import type { Coords, Station } from "@cuub/shared";
-import { buildSupportSmsUrl } from "@cuub/shared";
+import type { Coords, Station } from "@cuub/core";
+import {
+  MAP_STYLE_URL,
+  buildSupportSmsUrl,
+  distanceMiles,
+  fetchWalkingRoute,
+  formatMiles,
+  isStationUnavailable,
+  stationCoords,
+  stationsToGeoJSON,
+} from "@cuub/core";
 import { cuubClient } from "@/lib/cuubClient";
 import { AppPromptModal } from "@/features/app-prompt/AppPromptModal";
 import { ScanModal } from "@/features/scan/ScanModal";
-import { stationsToGeoJSON } from "./stationsToGeoJSON";
 import { loadStationIcons } from "./loadStationIcons";
 import {
   STATION_LAYER_IDS,
@@ -31,9 +39,6 @@ import {
   sheetPadding,
   zoomForHorizontalSpan,
 } from "./camera";
-import { distanceMiles, formatMiles } from "./distance";
-import { isStationUnavailable, stationCoords } from "./stationDetails";
-import { fetchWalkingRoute } from "./walkingRoute";
 import { useGeolocation } from "./useGeolocation";
 import { StationSheet } from "./StationSheet";
 import { BottomDock, SupportButton } from "./MapChrome";
@@ -147,7 +152,7 @@ export function MapView({
       if (!containerRef.current) return;
       const instance = new mb.Map({
         container: containerRef.current,
-        style: "mapbox://styles/mapbox/dark-v11",
+        style: MAP_STYLE_URL,
         center: DEFAULT_CENTER,
         zoom: DEFAULT_ZOOM,
         bearing: 0,

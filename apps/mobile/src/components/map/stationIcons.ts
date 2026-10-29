@@ -1,11 +1,11 @@
 export const STATION_ICONS = {
-  'station-icon-0': require('../../../assets/map/stations/icon0.png'),
-  'station-icon-1': require('../../../assets/map/stations/icon1.png'),
-  'station-icon-2': require('../../../assets/map/stations/icon2.png'),
-  'station-icon-3': require('../../../assets/map/stations/icon3.png'),
-  'station-icon-4': require('../../../assets/map/stations/icon4.png'),
-  'station-icon-5': require('../../../assets/map/stations/icon5.png'),
-  'station-icon-6': require('../../../assets/map/stations/icon6.png'),
+  'station-icon-0': require('@cuub/assets/stations/icon0.png'),
+  'station-icon-1': require('@cuub/assets/stations/icon1.png'),
+  'station-icon-2': require('@cuub/assets/stations/icon2.png'),
+  'station-icon-3': require('@cuub/assets/stations/icon3.png'),
+  'station-icon-4': require('@cuub/assets/stations/icon4.png'),
+  'station-icon-5': require('@cuub/assets/stations/icon5.png'),
+  'station-icon-6': require('@cuub/assets/stations/icon6.png'),
   /** Circle + count drawn as one symbol so digits stack with their cluster. */
   'cluster-circle': require('../../../assets/map/cluster-circle.png'),
 } as const;

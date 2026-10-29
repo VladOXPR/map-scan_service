@@ -1,4 +1,13 @@
-import type { Station } from "@cuub/shared";
+import {
+  mapFoundationStations,
+  mapInactiveLocations,
+  mapMapLocations,
+  mergeStationsWithInactive,
+  type FoundationStationRow,
+  type LocationRow,
+  type MapLocationRow,
+  type Station,
+} from "@cuub/core";
 
 interface ProxyOptions {
   path: string;
@@ -6,42 +15,6 @@ interface ProxyOptions {
   headers?: Record<string, string>;
   body?: string;
 }
-
-type CuubMapRow = {
-  locationId: string;
-  title: string;
-  latitude: number;
-  longitude: number;
-  hasStation?: boolean;
-};
-
-type CuubLiveStationRow = {
-  manufactureId?: string;
-  type?: string;
-  status?: string;
-  currentLocation?: {
-    locationId?: string;
-    title?: string;
-    latitude?: number | string | null;
-    longitude?: number | string | null;
-    isInventory?: boolean;
-    status?: string;
-  } | null;
-  live?: {
-    online?: boolean;
-    batteryCount?: number;
-    openSlots?: number;
-  } | null;
-};
-
-type CuubLocationRow = {
-  locationId?: string;
-  title?: string;
-  latitude?: number | string | null;
-  longitude?: number | string | null;
-  isInventory?: boolean;
-  status?: string;
-};
 
 function cuubApiUrl(): string | null {
   const url = process.env["CUUB_API_URL"]?.trim();
@@ -64,28 +37,6 @@ function parseJsonResponse(text: string): unknown {
   }
 }
 
-function hasValidCoords(
-  latitude: number | string | null | undefined,
-  longitude: number | string | null | undefined
-): boolean {
-  if (latitude == null || longitude == null) return false;
-  const lat = Number(latitude);
-  const lng = Number(longitude);
-  return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
-}
-
-function locationStatus(value: string | undefined | null): string {
-  return String(value ?? "").toUpperCase();
-}
-
-/** SLOT_6_WHITE → 6, SLOT_24_BLACK → 24. */
-function slotCapacityFromType(type: string | undefined | null): number | null {
-  const match = String(type ?? "").match(/SLOT[_\s-]?(\d+)/i);
-  if (!match) return null;
-  const n = Number.parseInt(match[1], 10);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
 /** Public GET /map pins only — no live slot/online data. Active venues only. */
 async function fetchPublicMapStations(
   baseUrl: string
@@ -97,7 +48,7 @@ async function fetchPublicMapStations(
   });
 
   const text = await res.text();
-  const json = parseJsonResponse(text) as { success?: boolean; data?: CuubMapRow[] } | null;
+  const json = parseJsonResponse(text) as { success?: boolean; data?: MapLocationRow[] } | null;
   if (!res.ok || !json?.success || !Array.isArray(json.data)) {
     return {
       status: res.ok ? 502 : res.status,
@@ -109,86 +60,12 @@ async function fetchPublicMapStations(
     };
   }
 
-  const mapped: Station[] = json.data
-    .filter((row) => row.hasStation !== false)
-    .filter((row) => hasValidCoords(row.latitude, row.longitude))
-    .map((row) => ({
-      id: row.locationId,
-      title: row.title,
-      latitude: row.latitude,
-      longitude: row.longitude,
-      filled_slots: null,
-      open_slots: null,
-      online: null,
-      inactive: false,
-    }));
-
+  const mapped = mapMapLocations(json.data);
   return {
     status: 200,
     payload: { success: true, data: mapped, count: mapped.length },
     stations: mapped,
   };
-}
-
-type AdaptedLive = {
-  stations: Station[];
-  /** Location IDs already represented by a station pin (for inactive merge dedupe). */
-  coveredLocationIds: Set<string>;
-};
-
-function adaptLiveStations(rows: CuubLiveStationRow[]): AdaptedLive {
-  const coveredLocationIds = new Set<string>();
-  const stations = rows
-    .map((row): Station | null => {
-      const loc = row.currentLocation;
-      if (!loc || loc.isInventory === true) return null;
-      const status = locationStatus(loc.status);
-      // Never show inventory (above) or archived venues.
-      if (status === "ARCHIVED") return null;
-      if (!hasValidCoords(loc.latitude, loc.longitude)) return null;
-      if (!row.manufactureId) return null;
-
-      if (loc.locationId) coveredLocationIds.add(String(loc.locationId));
-
-      const live = row.live ?? null;
-      const inactive = status === "INACTIVE";
-      return {
-        id: row.manufactureId,
-        title: loc.title,
-        latitude: loc.latitude as number | string,
-        longitude: loc.longitude as number | string,
-        filled_slots: inactive ? null : live?.batteryCount ?? null,
-        open_slots: inactive ? null : live?.openSlots ?? null,
-        online: inactive ? null : live ? (live.online ?? false) : null,
-        inactive,
-        slot_capacity: slotCapacityFromType(row.type),
-      };
-    })
-    .filter((row): row is Station => row != null);
-
-  return { stations, coveredLocationIds };
-}
-
-function adaptInactiveLocations(rows: CuubLocationRow[]): Station[] {
-  return rows
-    .map((row): Station | null => {
-      if (!row.locationId) return null;
-      if (row.isInventory === true) return null;
-      if (locationStatus(row.status) !== "INACTIVE") return null;
-      if (!hasValidCoords(row.latitude, row.longitude)) return null;
-
-      return {
-        id: row.locationId,
-        title: row.title,
-        latitude: row.latitude as number | string,
-        longitude: row.longitude as number | string,
-        filled_slots: null,
-        open_slots: null,
-        online: null,
-        inactive: true,
-      };
-    })
-    .filter((row): row is Station => row != null);
 }
 
 /**
@@ -211,7 +88,7 @@ async function fetchInactiveLocationPins(
     const text = await res.text();
     const json = parseJsonResponse(text) as {
       success?: boolean;
-      data?: CuubLocationRow[];
+      data?: LocationRow[];
     } | null;
     if (!res.ok || !json?.success || !Array.isArray(json.data)) {
       console.warn(
@@ -221,22 +98,11 @@ async function fetchInactiveLocationPins(
       );
       return [];
     }
-    return adaptInactiveLocations(json.data);
+    return mapInactiveLocations(json.data);
   } catch (err) {
     console.warn("[stations] inactive locations network error:", err);
     return [];
   }
-}
-
-function mergeInactivePins(
-  stations: Station[],
-  inactivePins: Station[],
-  coveredLocationIds: Set<string>
-): Station[] {
-  const extras = inactivePins.filter(
-    (pin) => !coveredLocationIds.has(String(pin.id))
-  );
-  return [...stations, ...extras];
 }
 
 function stationsPayload(stations: Station[]) {
@@ -290,18 +156,13 @@ export async function fetchMapStations(): Promise<{ status: number; payload: unk
       const text = await res.text();
       const json = parseJsonResponse(text) as {
         success?: boolean;
-        data?: CuubLiveStationRow[];
+        data?: FoundationStationRow[];
       } | null;
 
       if (res.ok && json?.success && Array.isArray(json.data)) {
-        const adapted = adaptLiveStations(json.data);
-        if (adapted.stations.length > 0 || inactivePins.length > 0) {
-          const merged = mergeInactivePins(
-            adapted.stations,
-            inactivePins,
-            adapted.coveredLocationIds
-          );
-          return stationsPayload(merged);
+        const live = mapFoundationStations(json.data);
+        if (live.length > 0 || inactivePins.length > 0) {
+          return stationsPayload(mergeStationsWithInactive(live, inactivePins));
         }
         console.warn(
           "[stations] live include_live returned 0 mappable stations; falling back to GET /map"
@@ -326,10 +187,37 @@ export async function fetchMapStations(): Promise<{ status: number; payload: unk
     return { status: publicMap.status, payload: publicMap.payload };
   }
 
-  const covered = new Set(publicMap.stations.map((s) => String(s.id)));
-  return stationsPayload(
-    mergeInactivePins(publicMap.stations, inactivePins, covered)
-  );
+  return stationsPayload(mergeStationsWithInactive(publicMap.stations, inactivePins));
+}
+
+export interface StationLandingData {
+  code: string;
+  title: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  online: boolean;
+  charged: number;
+  slots: number;
+}
+
+/**
+ * Public GET /app/stations/by-code/:code for the `/s/<code>` landing page.
+ * `null` when the code matches no station; throws on transport errors.
+ */
+export async function fetchStationByCode(code: string): Promise<StationLandingData | null> {
+  const baseUrl = cuubApiUrl();
+  if (!baseUrl) throw new Error("CUUB_API_URL is not configured");
+  const res = await fetch(`${baseUrl}/app/stations/by-code/${encodeURIComponent(code)}`, {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(5000),
+  });
+  if (res.status === 404 || res.status === 400) return null;
+  const json = parseJsonResponse(await res.text()) as { success?: boolean; data?: StationLandingData } | null;
+  if (!res.ok || !json?.success || !json.data) throw new Error(`Station lookup failed (${res.status})`);
+  const { title, address, latitude, longitude, online, charged, slots } = json.data;
+  return { code: json.data.code, title, address, latitude, longitude, online, charged, slots };
 }
 
 /** Machine-auth battery routes on cuub-api (GET/POST /battery/:cuubId). */
@@ -372,12 +260,4 @@ export async function proxyCuubBattery({
   }
 
   return { status: res.status, payload: json };
-}
-
-/** @deprecated Use fetchMapStations or proxyCuubBattery. Kept for grep visibility during cutover. */
-export async function proxyCuub(options: ProxyOptions) {
-  if (options.path === "/stations" && options.method === "GET") {
-    return fetchMapStations();
-  }
-  return proxyCuubBattery(options);
 }

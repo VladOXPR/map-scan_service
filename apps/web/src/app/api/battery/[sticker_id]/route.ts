@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { WEB_HANDOFF_PARAM } from "@cuub/core";
 import { proxyCuubBattery } from "@/lib/cuubApi";
+import { visitorIdFrom } from "@/lib/requestContext";
 
 export const dynamic = "force-dynamic";
 
 interface RouteContext {
-  params: { sticker_id: string };
+  params: Promise<{ sticker_id: string }>;
 }
 
 export async function GET(_req: NextRequest, { params }: RouteContext) {
   try {
+    const { sticker_id } = await params;
     const { status, payload } = await proxyCuubBattery({
-      path: `/battery/${encodeURIComponent(params.sticker_id)}`,
+      path: `/battery/${encodeURIComponent(sticker_id)}`,
       method: "GET",
     });
     return NextResponse.json(payload, { status });
@@ -25,18 +28,20 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
   try {
+    const { sticker_id } = await params;
     const manufactureId = req.headers.get("manufacture_id") || "";
     const stickerType = req.headers.get("sticker_type") || "type one";
+    const wv = visitorIdFrom(req.cookies.get(WEB_HANDOFF_PARAM)?.value);
 
     const { status, payload } = await proxyCuubBattery({
-      path: `/battery/${encodeURIComponent(params.sticker_id)}`,
+      path: `/battery/${encodeURIComponent(sticker_id)}`,
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         manufacture_id: manufactureId,
         sticker_type: stickerType,
       },
-      body: JSON.stringify({}),
+      body: JSON.stringify(wv ? { wv } : {}),
     });
     return NextResponse.json(payload, { status });
   } catch (err) {
