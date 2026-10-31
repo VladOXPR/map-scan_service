@@ -9,7 +9,7 @@ export function BillingProvider({ children }: { children: ReactElement }) {
 
 export const paymentsSupported = false;
 
-export function useMembershipCheckout() {
+function useUnsupportedCheckout() {
   return useCallback(
     async (..._args: unknown[]): Promise<CheckoutOutcome> => ({
       result: 'failed',
@@ -18,3 +18,6 @@ export function useMembershipCheckout() {
     [],
   );
 }
+
+export const useMembershipCheckout = useUnsupportedCheckout;
+export const useLostPowerBankCheckout = useUnsupportedCheckout;
