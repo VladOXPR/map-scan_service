@@ -10,7 +10,6 @@ import { nearestBarHeight } from './MapChrome';
 /** Card height plus its gap; map controls lift by this much while it shows. */
 export const ACTIVE_RENTAL_CARD_SPACE = 88 + spacing[3];
 
-const SOON_MS = 30 * 60_000;
 const tracked = new Set<string>();
 
 function durationLabel(ms: number): string {
@@ -43,15 +42,6 @@ export function ActiveRentalCard({ rental, onPress }: { rental: AppRental; onPre
   }, [rental.rentalId, rental.rentType]);
 
   const elapsed = now - new Date(rental.startedAt).getTime();
-  const returnBy = rental.returnBy ? new Date(rental.returnBy) : null;
-  const remaining = returnBy ? returnBy.getTime() - now : null;
-  const returnLine = returnBy
-    ? remaining !== null && remaining <= 0
-      ? 'Return window ended'
-      : `Return by ${returnBy.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
-    : 'Return to any CUUB station';
-  const returnColor =
-    remaining !== null && remaining <= SOON_MS ? colors.danger : colors.muted;
 
   return (
     <View
@@ -90,8 +80,8 @@ export function ActiveRentalCard({ rental, onPress }: { rental: AppRental; onPre
                 : `Out ${durationLabel(elapsed)}${rental.startTitle ? ` · ${rental.startTitle}` : ''}`}
             </Text>
             {!releasing ? (
-              <Text variant="caption" color={returnColor}>
-                {returnLine}
+              <Text variant="caption" muted>
+                Return anytime
               </Text>
             ) : null}
           </View>

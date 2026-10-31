@@ -23,10 +23,6 @@ function isTrigger(value: unknown): value is PaywallTrigger {
   return value === 'unlock' || value === 'account' || value === 'station';
 }
 
-function hoursLabel(hours: number): string {
-  return hours === 1 ? '1 hour' : `${hours} hours`;
-}
-
 function Benefit({ children }: { children: string }) {
   return (
     <View style={styles.benefit}>
@@ -86,7 +82,7 @@ export default function MembershipScreen() {
   }
 
   const data: Billing = billing.data;
-  const { membership, plan, unpaidBuyout } = data;
+  const { membership, plan } = data;
   const busy = state.phase === 'preparing' || state.phase === 'paying' || state.phase === 'activating';
 
   return (
@@ -147,25 +143,10 @@ export default function MembershipScreen() {
 
         {plan && !membership.active ? (
           <View style={styles.card}>
-            <Benefit>Unlimited power bank rentals</Benefit>
-            <Benefit>{`Keep each one up to ${hoursLabel(plan.maxRentHours)}`}</Benefit>
+            <Benefit>Unlimited rentals, one power bank at a time</Benefit>
+            <Benefit>No timer, no late fees: keep it as long as you need</Benefit>
             <Benefit>Return to any CUUB station</Benefit>
             <Benefit>Cancel anytime</Benefit>
-          </View>
-        ) : null}
-
-        {unpaidBuyout ? (
-          <View style={[styles.card, styles.warning]}>
-            <Text variant="subtitle">Payment needed</Text>
-            <Text muted>
-              {`We couldn't charge the ${formatMoney(unpaidBuyout.amountCents)} buyout for a battery that wasn't returned. Update your card to keep unlocking.`}
-            </Text>
-            <Button
-              label="Update card"
-              variant="secondary"
-              loading={manage.opening}
-              onPress={() => void manage.open()}
-            />
           </View>
         ) : null}
 
@@ -211,8 +192,8 @@ export default function MembershipScreen() {
             ) : null}
             <Text variant="caption" muted>
               {`Renews every ${plan.interval} at ${formatMoney(plan.amountCents, plan.currency)} until you cancel. ` +
-                `If a power bank isn't returned within ${hoursLabel(plan.maxRentHours)}, ` +
-                `we charge a ${formatMoney(plan.buyoutCents, plan.currency)} buyout to your card on file and you keep it.`}
+                'Return your power bank to rent the next one. ' +
+                `If you lose it, pay the ${formatMoney(plan.buyoutCents, plan.currency)} lost power bank fee to keep unlocking.`}
             </Text>
           </View>
         ) : null}
@@ -275,9 +256,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing[5],
     gap: spacing[3],
-  },
-  warning: {
-    borderColor: colors.danger,
   },
   benefit: {
     flexDirection: 'row',

@@ -5,12 +5,15 @@ import { ApiError, defaultUUID } from '@cuub/core';
 import { tracker } from '@/lib/analytics';
 import { useAuthStore } from '@/store/authStore';
 import { billingKey } from '@/features/billing/hooks';
+import { useLostPowerBankCheckout } from '@/features/billing/stripe';
 import {
+  checkoutBuyout,
   fetchActiveRental,
   fetchRental,
   fetchStationByCode,
   requestUnlock,
   type AppRental,
+  type BuyoutCheckout,
   type StationByCode,
 } from './api';
 
@@ -203,4 +206,86 @@ export function useUnlock(defaultCode?: string) {
 
   const reset = useCallback(() => setState({ phase: 'idle' }), []);
   return { state, unlock, reset };
+}
+
+const LOST_FEE_TIMEOUT_MS = 30_000;
+
+export type LostFeeState =
+  | { phase: 'idle' }
+  | { phase: 'preparing' }
+  | { phase: 'paying' }
+  | { phase: 'confirming' }
+  | { phase: 'paid' }
+  | { phase: 'error'; message: string };
+
+const LOST_FEE_COPY: Record<string, string> = {
+  NOT_OUT: 'This power bank is already settled.',
+  stripe_not_configured: 'Payments are not set up in this build.',
+  unsupported_platform: 'Get the CUUB app to pay for a lost power bank.',
+};
+
+/**
+ * Pays the lost power bank fee on an open membership rental: PaymentSheet for
+ * the buyout, then asks the server again until it's settled and unlocking is open.
+ */
+export function usePayLostPowerBank() {
+  const session = useAuthStore((s) => s.session);
+  const queryClient = useQueryClient();
+  const checkout = useLostPowerBankCheckout();
+  const [state, setState] = useState<LostFeeState>({ phase: 'idle' });
+
+  const pay = useCallback(
+    async (rentalId: string): Promise<boolean> => {
+      if (!session) return false;
+      const fail = (code: string | undefined, fallback?: string) => {
+        setState({
+          phase: 'error',
+          message: (code && LOST_FEE_COPY[code]) || fallback || 'Payment did not go through. Try again.',
+        });
+        return false;
+      };
+      setState({ phase: 'preparing' });
+
+      let current: BuyoutCheckout;
+      try {
+        current = await checkoutBuyout(session.token, rentalId);
+      } catch (error) {
+        return fail(error instanceof ApiError ? error.code : undefined, (error as Error)?.message);
+      }
+
+      if (current.status === 'requires_payment') {
+        setState({ phase: 'paying' });
+        const name = [session.user.firstName, session.user.lastName].filter(Boolean).join(' ');
+        const outcome = await checkout(current, { name: name || null, phone: session.user.phone });
+        if (outcome.result === 'canceled') {
+          setState({ phase: 'idle' });
+          return false;
+        }
+        if (outcome.result === 'failed') return fail(outcome.errorCode, outcome.message);
+      }
+
+      setState({ phase: 'confirming' });
+      const deadline = Date.now() + LOST_FEE_TIMEOUT_MS;
+      while (current.status !== 'paid' && Date.now() < deadline) {
+        try {
+          current = await checkoutBuyout(session.token, rentalId);
+        } catch {
+          // keep asking until the deadline
+        }
+        if (current.status !== 'paid') await sleep(POLL_MS);
+      }
+
+      void queryClient.invalidateQueries({ queryKey: activeRentalKey(session.user.userId) });
+      void queryClient.invalidateQueries({ queryKey: ['station-by-code'] });
+      if (current.status !== 'paid') {
+        return fail(undefined, 'Payment received. It can take a minute before you can unlock again.');
+      }
+      setState({ phase: 'paid' });
+      return true;
+    },
+    [checkout, queryClient, session],
+  );
+
+  const reset = useCallback(() => setState({ phase: 'idle' }), []);
+  return { state, pay, reset };
 }

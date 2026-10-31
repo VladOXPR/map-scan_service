@@ -1,12 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { MembershipChip, Text } from '@/components/ui';
-import { formatMoney } from '@/features/billing/api';
 import { colors, spacing } from '@/theme';
 import type { UnlockState } from './hooks';
-
-export function hoursLabel(hours: number): string {
-  return hours === 1 ? '1 hour' : `${hours} hours`;
-}
 
 /** What the person reads once the cabinet released their power bank, or is slow to. */
 export function UnlockOutcome({ state }: { state: UnlockState }) {
@@ -21,14 +16,7 @@ export function UnlockOutcome({ state }: { state: UnlockState }) {
             ? `It's in slot ${rental.slot}, lit up on the station.`
             : 'It just popped out of the station.'}
         </Text>
-        {rental.maxRentHours ? (
-          <Text muted>
-            {`Return it to any CUUB station within ${hoursLabel(rental.maxRentHours)}.`}
-            {rental.buyoutCents != null
-              ? ` After that, it's yours for ${formatMoney(rental.buyoutCents, rental.currency ?? 'usd')}.`
-              : ''}
-          </Text>
-        ) : null}
+        <Text muted>Keep it as long as you need. Return it to any CUUB station to rent the next one.</Text>
       </View>
     );
   }
