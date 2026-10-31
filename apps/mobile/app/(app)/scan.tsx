@@ -1,14 +1,33 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  Extrapolation,
+  interpolate,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { parseStationLink } from '@cuub/core';
+import { ScanReleaseOverlay } from '@/components/overlays/ScanReleaseOverlay';
 import { Button, LoadingState, Text } from '@/components/ui';
+import { unlockGate } from '@/features/auth/gate';
 import { stationPath } from '@/features/auth/routes';
+import { isUnlockBlockReason } from '@/features/rentals/api';
+import { useUnlock } from '@/features/rentals/hooks';
 import { tracker } from '@/lib/analytics';
 import { getLinkHosts } from '@/lib/config';
-import { colors, radius, spacing } from '@/theme';
+import { useAuthStore } from '@/store/authStore';
+import { colors, motion, radius, spacing } from '@/theme';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type ScanEntry = 'map' | 'station' | 'rental_card';
 const FRAME = 248;
@@ -28,6 +47,25 @@ export default function ScanScreen() {
   const [invalid, setInvalid] = useState(false);
   const handled = useRef(false);
   const lastInvalid = useRef<string | null>(null);
+  const session = useAuthStore((s) => s.session);
+  /** The scanned station being unlocked right here; null while still scanning. */
+  const [unlockCode, setUnlockCode] = useState<string | null>(null);
+  const { state: unlockState, unlock } = useUnlock();
+  const cameraRef = useRef<CameraView>(null);
+  const goHome = useCallback(() => router.replace('/(app)'), [router]);
+
+  /** Hint and flashlight fade out the moment a station code is read. */
+  const chrome = useSharedValue(1);
+  useEffect(() => {
+    chrome.value = withTiming(unlockCode ? 0 : 1, { duration: motion.fast });
+  }, [chrome, unlockCode]);
+  const chromeStyle = useAnimatedStyle(() => ({ opacity: chrome.value }));
+
+  // Refusals that need the person (membership, card, busy or empty cabinet) are handled on the station screen.
+  useEffect(() => {
+    if (!unlockCode || unlockState.phase !== 'failed' || !isUnlockBlockReason(unlockState.reason)) return;
+    router.replace(stationPath(unlockCode, 'qr_scan') as Href);
+  }, [router, unlockCode, unlockState]);
 
   useEffect(() => {
     tracker.track('scanner_opened', { entry });
@@ -67,7 +105,13 @@ export default function ScanScreen() {
     tracker.track('qr_scanned', { valid: true, stationCode: link.code });
     tracker.deeplink({ url: data, source: 'qr_scan', stationCode: link.code });
     if (link.webVisitorId) void tracker.linkWebVisitor(link.webVisitorId);
-    router.replace(stationPath(link.code, 'qr_scan') as Href);
+    if (unlockGate(session, stationPath(link.code)).step !== 'ready') {
+      router.replace(stationPath(link.code, 'qr_scan') as Href);
+      return;
+    }
+    void cameraRef.current?.pausePreview();
+    setUnlockCode(link.code);
+    void unlock(link.code);
   };
 
   const close = () => {
@@ -111,49 +155,119 @@ export default function ScanScreen() {
     );
   }
 
+  const busy = unlockState.phase === 'requesting' || unlockState.phase === 'releasing';
+  const refused = unlockState.phase === 'failed' && isUnlockBlockReason(unlockState.reason);
+  const showStatus =
+    unlockState.phase === 'releasing' ||
+    unlockState.phase === 'released' ||
+    unlockState.phase === 'slow' ||
+    (unlockState.phase === 'failed' && !refused);
+  const frameStage: FrameStage = !unlockCode ? 'scan' : showStatus ? 'gone' : 'loading';
+
   return (
     <View style={styles.root}>
       <CameraView
+        ref={cameraRef}
         style={StyleSheet.absoluteFill}
         facing="back"
         enableTorch={torch}
         barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-        onBarcodeScanned={onScanned}
+        onBarcodeScanned={unlockCode ? undefined : onScanned}
       />
 
+      {unlockCode ? (
+        <ScanReleaseOverlay
+          state={unlockState}
+          showStatus={showStatus}
+          onRetry={() => void unlock(unlockCode)}
+          onClose={close}
+          onHome={goHome}
+        />
+      ) : null}
+
       <View pointerEvents="none" style={styles.overlay}>
-        <View style={[styles.frame, invalid && { borderColor: colors.danger }]} />
-        <View style={styles.hint}>
+        <ScanFrame stage={frameStage} invalid={invalid} />
+        <Animated.View style={[styles.hint, chromeStyle]}>
           <Text center color={colors.white} variant="subtitle">
             {invalid ? "That's not a CUUB station code" : 'Point at the QR code on the station'}
           </Text>
-        </View>
+        </Animated.View>
       </View>
 
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Close scanner"
         onPress={close}
+        disabled={busy}
         style={[styles.roundButton, { top: insets.top + spacing[2], left: spacing[5] }]}
         hitSlop={8}
       >
         <Text style={styles.closeIcon}>×</Text>
       </Pressable>
 
-      <Pressable
+      <AnimatedPressable
         accessibilityRole="button"
         accessibilityLabel={torch ? 'Turn off flashlight' : 'Turn on flashlight'}
         onPress={() => setTorch((on) => !on)}
+        disabled={Boolean(unlockCode)}
         style={[
           styles.torch,
           { bottom: insets.bottom + spacing[7] },
           torch && { backgroundColor: colors.white },
+          chromeStyle,
         ]}
       >
         <Text variant="button" color={torch ? colors.black : colors.white}>
           {torch ? 'Light on' : 'Light'}
         </Text>
-      </Pressable>
+      </AnimatedPressable>
+    </View>
+  );
+}
+
+type FrameStage = 'scan' | 'loading' | 'gone';
+const DIAMOND = 34;
+
+/**
+ * The viewfinder square. On a read it closes into a small white diamond that
+ * spins while the unlock request is in flight, then drops away for the status.
+ */
+function ScanFrame({ stage, invalid }: { stage: FrameStage; invalid: boolean }) {
+  const size = useSharedValue(FRAME);
+  const rotation = useSharedValue(0);
+  const fill = useSharedValue(0);
+  const opacity = useSharedValue(1);
+
+  useEffect(() => {
+    if (stage === 'scan') return;
+    if (stage === 'loading') {
+      const settle = { duration: 420, easing: Easing.out(Easing.cubic) };
+      opacity.value = withTiming(1, { duration: motion.fast });
+      size.value = withTiming(DIAMOND, settle);
+      fill.value = withTiming(1, settle);
+      rotation.value = withSequence(
+        withTiming(45, settle),
+        withRepeat(withTiming(225, { duration: 1100, easing: Easing.inOut(Easing.cubic) }), -1),
+      );
+      return;
+    }
+    cancelAnimation(rotation);
+    size.value = withTiming(0, { duration: 220, easing: Easing.in(Easing.quad) });
+    opacity.value = withTiming(0, { duration: 220 });
+  }, [fill, opacity, rotation, size, stage]);
+
+  const style = useAnimatedStyle(() => ({
+    width: size.value,
+    height: size.value,
+    opacity: opacity.value,
+    borderRadius: interpolate(size.value, [DIAMOND, FRAME], [6, radius.xl], Extrapolation.CLAMP),
+    backgroundColor: interpolateColor(fill.value, [0, 1], ['rgba(255,255,255,0)', 'rgba(255,255,255,1)']),
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+
+  return (
+    <View style={styles.frameBox}>
+      <Animated.View style={[styles.frame, invalid && stage === 'scan' && { borderColor: colors.danger }, style]} />
     </View>
   );
 }
@@ -172,6 +286,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing[6],
+  },
+  frameBox: {
+    width: FRAME,
+    height: FRAME,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   frame: {
     width: FRAME,

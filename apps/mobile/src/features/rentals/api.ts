@@ -10,6 +10,20 @@ export type UnlockBlockReason =
   | 'UNPAID_BUYOUT'
   | 'NO_SUBSCRIPTION';
 
+const UNLOCK_BLOCK_REASONS: readonly string[] = [
+  'RENTAL_OPEN',
+  'OFFLINE',
+  'EMPTY',
+  'BUSY',
+  'NO_PROFILE',
+  'UNPAID_BUYOUT',
+  'NO_SUBSCRIPTION',
+] satisfies UnlockBlockReason[];
+
+export function isUnlockBlockReason(value: string): value is UnlockBlockReason {
+  return UNLOCK_BLOCK_REASONS.includes(value);
+}
+
 export type StationByCode = {
   code: string;
   locationId: string | null;

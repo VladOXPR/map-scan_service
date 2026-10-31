@@ -15,8 +15,9 @@ import { unlockGate } from '@/features/auth/gate';
 import { membershipPath, profileHref, stationPath } from '@/features/auth/routes';
 import { formatMoney } from '@/features/billing/api';
 import { useBilling, useManageMembership } from '@/features/billing/hooks';
-import type { StationByCode, UnlockBlockReason } from '@/features/rentals/api';
+import { isUnlockBlockReason, type StationByCode, type UnlockBlockReason } from '@/features/rentals/api';
 import { useStationByCode, useUnlock } from '@/features/rentals/hooks';
+import { hoursLabel, UnlockOutcome } from '@/features/rentals/UnlockOutcome';
 import { tracker } from '@/lib/analytics';
 import { ApiError } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/authStore';
@@ -26,24 +27,6 @@ const stationImage = require('@cuub/assets/illustrations/Station_on_stand.png');
 
 type Entry = DeeplinkSource | 'map';
 const ENTRIES: Entry[] = ['qr_scan', 'universal_link', 'push', 'web_handoff', 'map'];
-
-const BLOCK_REASONS: UnlockBlockReason[] = [
-  'RENTAL_OPEN',
-  'OFFLINE',
-  'EMPTY',
-  'BUSY',
-  'NO_PROFILE',
-  'UNPAID_BUYOUT',
-  'NO_SUBSCRIPTION',
-];
-
-function isBlockReason(value: string): value is UnlockBlockReason {
-  return (BLOCK_REASONS as string[]).includes(value);
-}
-
-function hoursLabel(hours: number): string {
-  return hours === 1 ? '1 hour' : `${hours} hours`;
-}
 
 function availabilityLabel(station: StationByCode): { text: string; color: string } {
   if (!station.online) return { text: 'Offline', color: colors.danger };
@@ -94,6 +77,17 @@ export default function StationScreen() {
     }, [refetchStation]),
   );
 
+  // The in-app scanner unlocks on the spot and only lands here when something
+  // was in the way (membership, profile, a busy cabinet); unlock once it clears.
+  // Shared or tapped /s/ links keep the Unlock button: they don't prove the person is at the station.
+  const autoUnlocked = useRef(false);
+  const canUnlockNow = station.data?.canUnlock === true;
+  useEffect(() => {
+    if (entry !== 'qr_scan' || autoUnlocked.current || !canUnlockNow || unlockState.phase !== 'idle') return;
+    autoUnlocked.current = true;
+    void unlock();
+  }, [canUnlockNow, entry, unlock, unlockState.phase]);
+
   const leave = () => {
     if (router.canGoBack()) router.back();
     else router.replace('/(app)');
@@ -133,7 +127,7 @@ export default function StationScreen() {
   const availability = availabilityLabel(data);
   const busy = unlockState.phase === 'requesting' || unlockState.phase === 'releasing';
   const failure = unlockState.phase === 'failed' ? unlockState : null;
-  const refused = failure && isBlockReason(failure.reason) ? failure.reason : null;
+  const refused = failure && isUnlockBlockReason(failure.reason) ? failure.reason : null;
   // A refusal from POST /app/rentals outranks the reason from the last station read.
   const reason: UnlockBlockReason | null = refused ?? data.reason;
 
@@ -257,32 +251,8 @@ export default function StationScreen() {
       >
         <Image source={stationImage} style={styles.image} resizeMode="contain" />
 
-        {unlockState.phase === 'released' ? (
-          <View style={styles.block}>
-            <MembershipChip />
-            <Text style={styles.headline}>Take your power bank</Text>
-            <Text muted>
-              {unlockState.rental.slot != null
-                ? `It's in slot ${unlockState.rental.slot}, lit up on the station.`
-                : 'It just popped out of the station.'}
-            </Text>
-            {unlockState.rental.maxRentHours ? (
-              <Text muted>
-                {`Return it to any CUUB station within ${hoursLabel(unlockState.rental.maxRentHours)}.`}
-                {unlockState.rental.buyoutCents != null
-                  ? ` After that, it's yours for ${formatMoney(unlockState.rental.buyoutCents, unlockState.rental.currency ?? 'usd')}.`
-                  : ''}
-              </Text>
-            ) : null}
-          </View>
-        ) : unlockState.phase === 'slow' ? (
-          <View style={styles.block}>
-            <Text style={styles.headline}>Still releasing…</Text>
-            <Text muted>
-              The station is taking longer than usual. Check the slots; your rental shows on the map once it's out.
-              If nothing comes out, it's canceled automatically and you're not charged.
-            </Text>
-          </View>
+        {unlockState.phase === 'released' || unlockState.phase === 'slow' ? (
+          <UnlockOutcome state={unlockState} />
         ) : (
           <View style={styles.block}>
             {member ? <MembershipChip label="Member" /> : null}
