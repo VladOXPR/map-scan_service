@@ -115,8 +115,9 @@ function sleep(ms: number) {
 /**
  * One unlock attempt: POST /app/rentals (retry-safe on clientEventId), then
  * poll the rental until the cabinet reports the power bank out or fails.
+ * `unlock(code)` targets another station than `defaultCode` (the scanner).
  */
-export function useUnlock(stationCode: string) {
+export function useUnlock(defaultCode?: string) {
   const session = useAuthStore((s) => s.session);
   const queryClient = useQueryClient();
   const [state, setState] = useState<UnlockState>({ phase: 'idle' });
@@ -129,14 +130,18 @@ export function useUnlock(stationCode: string) {
     [],
   );
 
-  const refreshAfter = useCallback(() => {
-    if (!session) return;
-    void queryClient.invalidateQueries({ queryKey: activeRentalKey(session.user.userId) });
-    void queryClient.invalidateQueries({ queryKey: ['station-by-code', stationCode] });
-  }, [queryClient, session, stationCode]);
+  const refreshAfter = useCallback(
+    (stationCode: string) => {
+      if (!session) return;
+      void queryClient.invalidateQueries({ queryKey: activeRentalKey(session.user.userId) });
+      void queryClient.invalidateQueries({ queryKey: ['station-by-code', stationCode] });
+    },
+    [queryClient, session],
+  );
 
-  const unlock = useCallback(async () => {
-    if (!session) return;
+  const unlock = useCallback(async (code: string | undefined = defaultCode) => {
+    if (!session || !code) return;
+    const stationCode = code;
     tracker.track('unlock_tapped', { stationCode });
     const startedAt = Date.now();
     attemptId.current ??= defaultUUID();
@@ -155,7 +160,7 @@ export function useUnlock(stationCode: string) {
         reason,
         message: FAILURE_COPY[reason] ?? (error as Error).message ?? FAILURE_COPY.network,
       });
-      refreshAfter();
+      refreshAfter(stationCode);
       return;
     }
 
@@ -170,7 +175,7 @@ export function useUnlock(stationCode: string) {
     }
     if (!alive.current) return;
     attemptId.current = null;
-    refreshAfter();
+    refreshAfter(stationCode);
 
     if (rental.status === 'ACTIVE') {
       tracker.track('unlock_result', {
@@ -194,7 +199,7 @@ export function useUnlock(stationCode: string) {
       reason: rental.status,
       message: FAILURE_COPY[rental.status] ?? FAILURE_COPY.UNLOCK_FAILED,
     });
-  }, [refreshAfter, session, stationCode]);
+  }, [defaultCode, refreshAfter, session]);
 
   const reset = useCallback(() => setState({ phase: 'idle' }), []);
   return { state, unlock, reset };
