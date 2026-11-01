@@ -53,7 +53,7 @@ First submission scope: **map** (find stations). SMS OTP is in the repo but **no
 | Support URL | `https://cuub.tech/contact` |
 | Category | Travel or Lifestyle |
 | Age rating | Answer for location; no account/phone collection in this binary; no UGC/payments in v1 |
-| App Privacy | Precise Location, Product Interaction; omit Phone Number while login is parked; tracking = No if no ad/analytics SDKs |
+| App Privacy | Linked to the user, for App Functionality and Analytics: Precise Location, Product Interaction, Device ID, Crash Data, Other Diagnostic Data (battery level, charging, Low Power Mode); add Phone Number when login ships. Tracking = No: PostHog is first-party analytics, nothing is shared for ads or with data brokers |
 | Review notes | Map is public and does not require an account. Location explainer uses Continue and always presents the iOS prompt. Login returns with rent/pay. |
 
 ### Screenshots

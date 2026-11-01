@@ -5,6 +5,7 @@ import {
   type AnalyticsPlatform,
   type DeeplinkSource,
   type EventProperties,
+  type LocationTrigger,
   type MembershipStatus,
   type PermissionKind,
   type PermissionResult,
@@ -43,6 +44,20 @@ export interface TrackerContext {
   /** Precision 6 at most, and only while location permission is granted. */
   geohash?: string | null;
   hasLocationPermission?: boolean | null;
+  /** Phone battery, 0-100. */
+  batteryLevel?: number | null;
+  batteryCharging?: boolean | null;
+  lowPowerMode?: boolean | null;
+}
+
+/** One GPS reading, sent with the session and the phone battery at that moment. */
+export interface LocationFix {
+  trigger: LocationTrigger;
+  latitude: number;
+  longitude: number;
+  accuracyM?: number | null;
+  /** When the reading was taken (epoch ms); a cached reading can be minutes old. */
+  fixedAt?: number | null;
 }
 
 /** PostHog person properties. Name, phone and date of birth are never sent. */
@@ -52,7 +67,7 @@ export interface PersonTraits {
   ageBracket?: string | null;
 }
 
-export type IngestKind = "device" | "session" | "events" | "identify";
+export type IngestKind = "device" | "session" | "events" | "identify" | "location";
 
 export interface TrackerConfig {
   platform: AnalyticsPlatform;
@@ -81,7 +96,8 @@ export interface TrackerConfig {
 }
 
 export interface Tracker {
-  start(): Promise<void>;
+  /** `newSession` is false when the app relaunched inside the last session's idle window. */
+  start(): Promise<{ newSession: boolean }>;
   getDeviceId(): string | null;
   getSessionId(): string | null;
   getUserId(): string | null;
@@ -95,6 +111,8 @@ export interface Tracker {
   deeplink(input: { url: string; source: DeeplinkSource; stationCode?: string | null }): void;
   push(kind: "received" | "opened", properties?: EventProperties): void;
   permission(kind: PermissionKind, phase: "prompted" | "result", result?: PermissionResult): void;
+  /** Queues a location fix on the current session; retried like events. */
+  location(fix: LocationFix): void;
   apiError(info: { method: string; path: string; status: number; latencyMs: number; errorCode?: string | null }): void;
   error(error: unknown, info?: { fatal?: boolean; source?: string }): void;
   setSessionSource(source: SessionSource): void;
@@ -103,7 +121,8 @@ export interface Tracker {
   updatePerson(traits: PersonTraits): void;
   reset(): Promise<void>;
   linkWebVisitor(webVisitorId: string): Promise<void>;
-  foreground(): void;
+  /** `newSession` is true when coming back opened a new session rather than resuming one. */
+  foreground(): Promise<{ newSession: boolean }>;
   background(): void;
   flush(options?: { beacon?: boolean }): Promise<void>;
   shutdown(): void;
@@ -122,7 +141,13 @@ type QueuedEvent = {
   properties: Record<string, PropertyValue>;
 };
 
-type QueuedSession = {
+type Battery = {
+  batteryLevel: number | null;
+  batteryCharging: boolean | null;
+  lowPowerMode: boolean | null;
+};
+
+type QueuedSession = Battery & {
   kind: "session";
   /** Session open and close items share the session id; this keeps them apart. */
   itemId: string;
@@ -135,7 +160,22 @@ type QueuedSession = {
   endReason?: SessionEndReason;
 };
 
-type QueueItem = QueuedEvent | QueuedSession;
+type QueuedLocation = Battery & {
+  kind: "location";
+  /** The fix id; the server also uses it for the session's location_fixed event. */
+  itemId: string;
+  sessionId: string;
+  userId: string | null;
+  source: SessionSource;
+  occurredAt: string;
+  trigger: LocationTrigger;
+  latitude: number;
+  longitude: number;
+  accuracyM: number | null;
+  fixAgeMs: number | null;
+};
+
+type QueueItem = QueuedEvent | QueuedSession | QueuedLocation;
 
 type SessionState = {
   sessionId: string;
@@ -238,7 +278,7 @@ export function createTracker(config: TrackerConfig): Tracker {
   let nextSource: { source: SessionSource; at: number } | null = null;
   let pending: Array<() => void> = [];
   let ready = false;
-  let starting: Promise<void> | null = null;
+  let starting: Promise<{ newSession: boolean }> | null = null;
   let flushing: Promise<void> | null = null;
   let retryAt = 0;
   let failures = 0;
@@ -284,6 +324,14 @@ export function createTracker(config: TrackerConfig): Tracker {
     }
   }
 
+  function batteryOf(ctx: TrackerContext): Battery {
+    return {
+      batteryLevel: ctx.batteryLevel ?? null,
+      batteryCharging: ctx.batteryCharging ?? null,
+      lowPowerMode: ctx.lowPowerMode ?? null,
+    };
+  }
+
   function enqueue(item: QueueItem): void {
     queue.push(item);
     if (queue.length > maxQueue) {
@@ -318,13 +366,15 @@ export function createTracker(config: TrackerConfig): Tracker {
       source,
       converted: false,
     };
+    const ctx = context();
     enqueue({
       kind: "session",
       itemId: uuid(),
       sessionId: session.sessionId,
       userId,
       source,
-      hasLocationPermission: context().hasLocationPermission ?? null,
+      hasLocationPermission: ctx.hasLocationPermission ?? null,
+      ...batteryOf(ctx),
       startedAt: new Date(at).toISOString(),
     });
     persistSession();
@@ -334,6 +384,7 @@ export function createTracker(config: TrackerConfig): Tracker {
     if (!session) return;
     const closing = session;
     const endedAt = Math.max(at, closing.startedAt);
+    const ctx = context();
     enqueue({
       kind: "event",
       eventId: uuid(),
@@ -342,7 +393,7 @@ export function createTracker(config: TrackerConfig): Tracker {
       sessionId: closing.sessionId,
       userId,
       source: closing.source,
-      hasLocationPermission: context().hasLocationPermission ?? null,
+      hasLocationPermission: ctx.hasLocationPermission ?? null,
       properties: sanitizeProperties({ reason, durationMs: endedAt - closing.startedAt }),
     });
     enqueue({
@@ -351,7 +402,8 @@ export function createTracker(config: TrackerConfig): Tracker {
       sessionId: closing.sessionId,
       userId,
       source: closing.source,
-      hasLocationPermission: context().hasLocationPermission ?? null,
+      hasLocationPermission: ctx.hasLocationPermission ?? null,
+      ...batteryOf(ctx),
       endedAt: new Date(endedAt).toISOString(),
       endReason: reason,
     });
@@ -384,6 +436,9 @@ export function createTracker(config: TrackerConfig): Tracker {
       isAuthenticated: Boolean(userId),
       membership: ctx.membership ?? undefined,
       geohash: ctx.hasLocationPermission === false ? undefined : ctx.geohash?.slice(0, 6) ?? undefined,
+      batteryLevel: ctx.batteryLevel ?? undefined,
+      batteryCharging: ctx.batteryCharging ?? undefined,
+      lowPowerMode: ctx.lowPowerMode ?? undefined,
     };
   }
 
@@ -456,6 +511,28 @@ export function createTracker(config: TrackerConfig): Tracker {
       endReason: item.endReason,
       hasLocationPermission: item.hasLocationPermission ?? undefined,
       isAuthenticated: Boolean(item.userId),
+      batteryLevel: item.batteryLevel ?? undefined,
+      batteryCharging: item.batteryCharging ?? undefined,
+      lowPowerMode: item.lowPowerMode ?? undefined,
+    };
+  }
+
+  function locationBody(item: QueuedLocation): Record<string, unknown> {
+    return {
+      fixId: item.itemId,
+      deviceId,
+      sessionId: item.sessionId,
+      source: item.source,
+      trigger: item.trigger,
+      occurredAt: item.occurredAt,
+      sentAt: new Date(now()).toISOString(),
+      latitude: item.latitude,
+      longitude: item.longitude,
+      accuracyM: item.accuracyM ?? undefined,
+      fixAgeMs: item.fixAgeMs ?? undefined,
+      batteryLevel: item.batteryLevel ?? undefined,
+      batteryCharging: item.batteryCharging ?? undefined,
+      lowPowerMode: item.lowPowerMode ?? undefined,
     };
   }
 
@@ -480,8 +557,13 @@ export function createTracker(config: TrackerConfig): Tracker {
 
   async function send(batch: QueueItem[], beacon: boolean): Promise<SendOutcome> {
     const head = batch[0];
-    const kind: IngestKind = head.kind === "session" ? "session" : "events";
-    const body = head.kind === "session" ? sessionBody(head) : eventsBody(batch as QueuedEvent[]);
+    const kind: IngestKind = head.kind === "event" ? "events" : head.kind;
+    const body =
+      head.kind === "session"
+        ? sessionBody(head)
+        : head.kind === "location"
+          ? locationBody(head)
+          : eventsBody(batch as QueuedEvent[]);
     const url = config.endpoint(kind);
     const token = head.userId && head.userId === userId ? config.getToken?.() ?? null : null;
 
@@ -507,7 +589,7 @@ export function createTracker(config: TrackerConfig): Tracker {
   function nextBatch(beacon: boolean): QueueItem[] {
     const head = queue[0];
     if (!head) return [];
-    if (head.kind === "session") return [head];
+    if (head.kind !== "event") return [head];
     const limit = beacon ? BEACON_BATCH : MAX_EVENTS_PER_BATCH;
     const batch: QueueItem[] = [];
     for (const item of queue) {
@@ -580,7 +662,7 @@ export function createTracker(config: TrackerConfig): Tracker {
     );
   }
 
-  async function start(): Promise<void> {
+  async function start(): Promise<{ newSession: boolean }> {
     if (starting) return starting;
     starting = (async () => {
       try {
@@ -621,6 +703,7 @@ export function createTracker(config: TrackerConfig): Tracker {
         }
       }
       ready = true;
+      const newSession = !session;
       record("app_opened", { coldStart: true });
 
       const queued = pending;
@@ -632,6 +715,7 @@ export function createTracker(config: TrackerConfig): Tracker {
         (timer as { unref?: () => void }).unref?.();
       }
       void registerDevice();
+      return { newSession };
     })();
     return starting;
   }
@@ -720,24 +804,30 @@ export function createTracker(config: TrackerConfig): Tracker {
     }
   }
 
-  function foreground(): void {
-    whenReady(() => {
-      const at = now();
-      const resumed = session;
-      if (resumed && resumed.backgroundedAt === null) return;
-      let newSession = !resumed;
-      if (resumed && resumed.backgroundedAt !== null) {
-        if (at - resumed.backgroundedAt > idleMs) {
-          closeSession(resumed.backgroundedAt, resumed.converted ? "converted" : "abandoned");
-          newSession = true;
-        } else {
-          resumed.backgroundedAt = null;
-          resumed.foregroundedAt = at;
-          nextSource = null;
+  function foreground(): Promise<{ newSession: boolean }> {
+    return new Promise((resolve) => {
+      whenReady(() => {
+        const at = now();
+        const resumed = session;
+        if (resumed && resumed.backgroundedAt === null) {
+          resolve({ newSession: false });
+          return;
         }
-      }
-      record("app_foregrounded", { newSession });
-      if (session) session.foregroundedAt = at;
+        let newSession = !resumed;
+        if (resumed && resumed.backgroundedAt !== null) {
+          if (at - resumed.backgroundedAt > idleMs) {
+            closeSession(resumed.backgroundedAt, resumed.converted ? "converted" : "abandoned");
+            newSession = true;
+          } else {
+            resumed.backgroundedAt = null;
+            resumed.foregroundedAt = at;
+            nextSource = null;
+          }
+        }
+        record("app_foregrounded", { newSession });
+        if (session) session.foregroundedAt = at;
+        resolve({ newSession });
+      });
     });
   }
 
@@ -799,6 +889,30 @@ export function createTracker(config: TrackerConfig): Tracker {
     permission(kind, phase, result) {
       if (phase === "prompted") track("permission_prompted", { permission: kind });
       else track("permission_result", { permission: kind, result: result ?? "undetermined" });
+    },
+    location(fix) {
+      whenReady(() => {
+        if (!Number.isFinite(fix.latitude) || !Number.isFinite(fix.longitude)) return;
+        const at = now();
+        const current = activeSession(at);
+        enqueue({
+          kind: "location",
+          itemId: uuid(),
+          sessionId: current.sessionId,
+          userId,
+          source: current.source,
+          occurredAt: new Date(at).toISOString(),
+          trigger: fix.trigger,
+          latitude: fix.latitude,
+          longitude: fix.longitude,
+          accuracyM: fix.accuracyM ?? null,
+          fixAgeMs: fix.fixedAt ? Math.max(0, at - fix.fixedAt) : null,
+          ...batteryOf(context()),
+        });
+        persistSession();
+        // The server judges station availability only on fixes that arrive within minutes.
+        void flush();
+      });
     },
     apiError({ method, path, status, latencyMs, errorCode }) {
       track("api_error", {

@@ -30,6 +30,7 @@ import { MembershipSection } from '@/features/billing/MembershipSection';
 import { isAuthFailure } from '@/lib/apiClient';
 import { useNearbyStations } from '@/features/stations/hooks';
 import { useLocationPermission } from '@/features/location/hooks';
+import { recordLocationFix } from '@/features/location/fix';
 import { tracker } from '@/lib/analytics';
 import { getSupportPhoneE164 } from '@/lib/config';
 import { useAuthStore } from '@/store/authStore';
@@ -290,6 +291,7 @@ export default function HomeScreen() {
   }, [coords, nearestStation]);
 
   const onFindNearest = () => {
+    void recordLocationFix('find_nearest');
     if (!nearestStation) {
       tracker.track('find_nearest_blocked', { reason: stations.length ? 'none_online' : 'no_stations' });
       return;

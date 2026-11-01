@@ -5,11 +5,14 @@ import { usePathname } from 'expo-router';
 import { APP_SCHEME, WEB_HANDOFF_PARAM, parseStationLink } from '@cuub/core';
 import {
   linkInstallReferrer,
+  refreshBattery,
   tracker,
+  watchBattery,
   watchGlobalErrors,
   watchNetwork,
 } from '@/lib/analytics';
 import { getLinkHosts } from '@/lib/config';
+import { recordLocationFix } from '@/features/location/fix';
 
 const handledResponses = new Set<string>();
 
@@ -60,8 +63,8 @@ function trackResponse(response: Notifications.NotificationResponse | null): voi
 
 /**
  * Starts the tracker and auto-captures what every screen would otherwise have
- * to: lifecycle, screens, deep links, pushes and crashes. Mounted once in the
- * root layout.
+ * to: lifecycle, screens, deep links, pushes, crashes, and where the phone is
+ * when a new session starts. Mounted once in the root layout.
  */
 export function useAnalyticsLifecycle(): void {
   const pathname = usePathname();
@@ -69,11 +72,25 @@ export function useAnalyticsLifecycle(): void {
   useEffect(() => {
     watchGlobalErrors();
     watchNetwork();
-    void tracker.start().then(() => linkInstallReferrer());
+    watchBattery();
+    void refreshBattery()
+      .then(() => tracker.start())
+      .then(({ newSession }) => {
+        if (newSession) void recordLocationFix('open');
+        return linkInstallReferrer();
+      });
 
     const appState = AppState.addEventListener('change', (state) => {
-      if (state === 'active') tracker.foreground();
-      else if (state === 'background') tracker.background();
+      if (state === 'background') {
+        tracker.background();
+        return;
+      }
+      if (state !== 'active') return;
+      void refreshBattery()
+        .then(() => (AppState.currentState === 'active' ? tracker.foreground() : null))
+        .then((result) => {
+          if (result?.newSession) void recordLocationFix('open');
+        });
     });
 
     void Linking.getInitialURL().then(trackLink).catch(() => undefined);
