@@ -96,12 +96,11 @@ export const MAX_PROPERTY_KEYS = 32;
 export const MAX_PROPERTY_BYTES = 4096;
 export const MAX_STRING_LENGTH = 200;
 
-/** Dropped by the server anyway; never leave the device. */
+/**
+ * Dropped by the server anyway; never leave the device in event properties.
+ * Coordinates are sent only as location fixes (`tracker.location`).
+ */
 export const FORBIDDEN_PROPERTY_KEYS: ReadonlySet<string> = new Set([
-  "battery",
-  "batteryLevel",
-  "batteryPercent",
-  "percent",
   "latitude",
   "longitude",
   "lat",
@@ -122,6 +121,10 @@ export const FORBIDDEN_PROPERTY_KEYS: ReadonlySet<string> = new Set([
 
 export type PropertyValue = string | number | boolean | null;
 export type EventProperties = Record<string, PropertyValue | undefined>;
+
+/** What prompted a location fix: a new session starting, or a Nearest tap. */
+export const LOCATION_TRIGGERS = ["open", "find_nearest"] as const;
+export type LocationTrigger = (typeof LOCATION_TRIGGERS)[number];
 
 export type DeeplinkSource = "qr_scan" | "universal_link" | "push" | "web_handoff";
 export type PermissionKind = "location" | "camera" | "notifications";

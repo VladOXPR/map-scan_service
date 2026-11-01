@@ -11,7 +11,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "tech.cuub.user",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "CUUB uses your location to show nearby battery stations and alert you when your phone battery is low and a station is close by.",
+        "NSLocationWhenInUseUsageDescription": "CUUB uses your location to show nearby battery stations, alert you when your phone battery is low and a station is close by, and learn where people need a charge so we can add stations there.",
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
           "processing",
@@ -77,7 +77,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "CUUB uses your location to show nearby battery stations and alert you when your phone battery is low and a station is close by."
+          "locationWhenInUsePermission": "CUUB uses your location to show nearby battery stations, alert you when your phone battery is low and a station is close by, and learn where people need a charge so we can add stations there."
         }
       ],
       [

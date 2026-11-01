@@ -297,6 +297,96 @@ test("screen views carry the previous screen and the time spent on it", async ()
   assert.equal(views[1].properties.prevScreenMs, 4_000);
 });
 
+test("the phone battery rides on every event and on the session open and close", async () => {
+  const battery = { batteryLevel: 64, batteryCharging: false, lowPowerMode: false };
+  const h = harness({ context: () => ({ ...battery }) });
+  await h.tracker.start();
+  const first = h.tracker.getSessionId();
+  h.tracker.track("map_loaded");
+  battery.batteryLevel = 51;
+  battery.batteryCharging = true;
+  h.tracker.background();
+  h.clock.t += 31 * 60_000;
+  h.tracker.foreground();
+  await h.tracker.flush();
+
+  const map = h.events().find((e: any) => e.name === "map_loaded");
+  assert.equal(map?.properties.batteryLevel, 64);
+  assert.equal(map?.properties.batteryCharging, false);
+  const open = h.calls.find((c) => c.url.endsWith("/session") && c.body.sessionId === first && c.body.startedAt);
+  assert.equal(open?.body.batteryLevel, 64);
+  assert.equal(open?.body.lowPowerMode, false);
+  const close = h.calls.find((c) => c.url.endsWith("/session") && c.body.sessionId === first && c.body.endReason);
+  assert.equal(close?.body.batteryLevel, 51);
+  assert.equal(close?.body.batteryCharging, true);
+});
+
+test("a location fix is queued on the session and sent on its own with the battery", async () => {
+  const h = harness({ context: () => ({ batteryLevel: 17, batteryCharging: false, lowPowerMode: true }) });
+  await h.tracker.start();
+  h.tracker.track("map_loaded");
+  h.tracker.location({ trigger: "open", latitude: 41.90187, longitude: -87.65432, accuracyM: 14, fixedAt: h.clock.t - 1_500 });
+  h.tracker.track("find_nearest_tapped");
+  await h.tracker.flush();
+
+  const fixes = h.calls.filter((c) => c.url.endsWith("/location"));
+  assert.equal(fixes.length, 1);
+  const body = fixes[0].body;
+  assert.equal(body.sessionId, h.tracker.getSessionId());
+  assert.equal(body.deviceId, h.tracker.getDeviceId());
+  assert.equal(body.trigger, "open");
+  assert.equal(body.latitude, 41.90187);
+  assert.equal(body.accuracyM, 14);
+  assert.equal(body.fixAgeMs, 1_500);
+  assert.equal(body.batteryLevel, 17);
+  assert.equal(body.lowPowerMode, true);
+  assert.ok(body.fixId && body.occurredAt && body.sentAt);
+  assert.deepEqual(
+    h.events().map((e: any) => e.name),
+    ["app_opened", "map_loaded", "find_nearest_tapped"],
+    "events around the fix still arrive, without coordinates"
+  );
+  assert.ok(h.events().every((e: any) => e.properties.latitude === undefined));
+});
+
+test("start and foreground say whether a new session began, which is when the app takes a location fix", async () => {
+  const storage = new MemoryStorage();
+  const first = harness({ storage });
+  assert.deepEqual(await first.tracker.start(), { newSession: true });
+  const session = first.tracker.getSessionId();
+  assert.deepEqual(await first.tracker.foreground(), { newSession: false }, "already active: nothing reopened");
+  first.tracker.background();
+  first.clock.t += 5 * 60_000;
+  assert.deepEqual(await first.tracker.foreground(), { newSession: false }, "a short break resumes");
+  assert.equal(first.tracker.getSessionId(), session);
+  first.tracker.background();
+  first.clock.t += 31 * 60_000;
+  assert.deepEqual(await first.tracker.foreground(), { newSession: true });
+  assert.notEqual(first.tracker.getSessionId(), session);
+  first.tracker.background();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const relaunched = harness({ storage, clock: { t: first.clock.t + 60_000 } });
+  assert.deepEqual(await relaunched.tracker.start(), { newSession: false }, "a relaunch inside the idle window continues");
+  const later = harness({ storage, clock: { t: first.clock.t + 45 * 60_000 } });
+  assert.deepEqual(await later.tracker.start(), { newSession: true });
+});
+
+test("a location fix that fails to send is retried, and a bad reading is ignored", async () => {
+  let fail = true;
+  const h = harness({ respond: (call) => (call.url.endsWith("/location") && fail ? 503 : 200) });
+  await h.tracker.start();
+  h.tracker.location({ trigger: "find_nearest", latitude: Number.NaN, longitude: -87.6 });
+  h.tracker.location({ trigger: "find_nearest", latitude: 41.9, longitude: -87.6 });
+  await h.tracker.flush();
+  fail = false;
+  h.clock.t += 10 * 60_000;
+  await h.tracker.flush();
+  const fixes = h.calls.filter((c) => c.url.endsWith("/location"));
+  assert.equal(fixes.length, 2, "one failed attempt, one retry; the NaN reading never queued");
+  assert.equal(fixes[0].body.fixId, fixes[1].body.fixId);
+});
+
 test("twenty queued events trigger a flush without waiting for the timer", async () => {
   const h = harness();
   await h.tracker.start();
