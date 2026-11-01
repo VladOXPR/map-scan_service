@@ -14,9 +14,11 @@ import {
 import { unlockGate } from '@/features/auth/gate';
 import { membershipPath, profileHref, stationPath } from '@/features/auth/routes';
 import { formatMoney } from '@/features/billing/api';
-import { useBilling, useManageMembership } from '@/features/billing/hooks';
-import type { StationByCode, UnlockBlockReason } from '@/features/rentals/api';
-import { useStationByCode, useUnlock } from '@/features/rentals/hooks';
+import { useBilling } from '@/features/billing/hooks';
+import { paymentsSupported } from '@/features/billing/stripe';
+import { isUnlockBlockReason, type StationByCode, type UnlockBlockReason } from '@/features/rentals/api';
+import { useActiveRental, usePayLostPowerBank, useStationByCode, useUnlock } from '@/features/rentals/hooks';
+import { UnlockOutcome } from '@/features/rentals/UnlockOutcome';
 import { tracker } from '@/lib/analytics';
 import { ApiError } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/authStore';
@@ -26,24 +28,6 @@ const stationImage = require('@cuub/assets/illustrations/Station_on_stand.png');
 
 type Entry = DeeplinkSource | 'map';
 const ENTRIES: Entry[] = ['qr_scan', 'universal_link', 'push', 'web_handoff', 'map'];
-
-const BLOCK_REASONS: UnlockBlockReason[] = [
-  'RENTAL_OPEN',
-  'OFFLINE',
-  'EMPTY',
-  'BUSY',
-  'NO_PROFILE',
-  'UNPAID_BUYOUT',
-  'NO_SUBSCRIPTION',
-];
-
-function isBlockReason(value: string): value is UnlockBlockReason {
-  return (BLOCK_REASONS as string[]).includes(value);
-}
-
-function hoursLabel(hours: number): string {
-  return hours === 1 ? '1 hour' : `${hours} hours`;
-}
 
 function availabilityLabel(station: StationByCode): { text: string; color: string } {
   if (!station.online) return { text: 'Offline', color: colors.danger };
@@ -68,7 +52,8 @@ export default function StationScreen() {
   const session = useAuthStore((s) => s.session);
   const station = useStationByCode(code);
   const billing = useBilling();
-  const manage = useManageMembership();
+  const activeRental = useActiveRental();
+  const { state: lostFee, pay: payLostFee } = usePayLostPowerBank();
   const { state: unlockState, unlock, reset } = useUnlock(code ?? '');
   const viewed = useRef(false);
 
@@ -93,6 +78,17 @@ export default function StationScreen() {
       if (viewed.current) void refetchStation();
     }, [refetchStation]),
   );
+
+  // The in-app scanner unlocks on the spot and only lands here when something
+  // was in the way (membership, profile, a busy cabinet); unlock once it clears.
+  // Shared or tapped /s/ links keep the Unlock button: they don't prove the person is at the station.
+  const autoUnlocked = useRef(false);
+  const canUnlockNow = station.data?.canUnlock === true;
+  useEffect(() => {
+    if (entry !== 'qr_scan' || autoUnlocked.current || !canUnlockNow || unlockState.phase !== 'idle') return;
+    autoUnlocked.current = true;
+    void unlock();
+  }, [canUnlockNow, entry, unlock, unlockState.phase]);
 
   const leave = () => {
     if (router.canGoBack()) router.back();
@@ -129,13 +125,20 @@ export default function StationScreen() {
   const gate = unlockGate(session, returnTo);
   const plan = billing.data?.plan ?? null;
   const member = billing.data?.membership.active ?? false;
-  const maxHours = billing.data?.membership.maxRentHours ?? plan?.maxRentHours ?? null;
   const availability = availabilityLabel(data);
   const busy = unlockState.phase === 'requesting' || unlockState.phase === 'releasing';
   const failure = unlockState.phase === 'failed' ? unlockState : null;
-  const refused = failure && isBlockReason(failure.reason) ? failure.reason : null;
+  const refused = failure && isUnlockBlockReason(failure.reason) ? failure.reason : null;
   // A refusal from POST /app/rentals outranks the reason from the last station read.
   const reason: UnlockBlockReason | null = refused ?? data.reason;
+  const openRental = activeRental.data ?? null;
+  const lostRental =
+    openRental?.status === 'ACTIVE' && openRental.rentType === 'SUBSCRIPTION' && openRental.buyoutCents != null
+      ? openRental
+      : null;
+  const payingLostFee =
+    lostFee.phase === 'preparing' || lostFee.phase === 'paying' || lostFee.phase === 'confirming';
+  const lostFeeError = lostFee.phase === 'error' ? lostFee.message : null;
 
   const blockedTap = (why: string) => tracker.track('unlock_blocked', { stationCode: data.code, reason: why });
 
@@ -177,19 +180,33 @@ export default function StationScreen() {
             }}
           />
         );
-      case 'UNPAID_BUYOUT':
-        return (
-          <GradientButton
-            label="Update card"
-            loading={manage.opening}
-            onPress={() => {
-              blockedTap('UNPAID_BUYOUT');
-              void manage.open();
-            }}
-          />
-        );
       case 'RENTAL_OPEN':
-        return <Button label="Back to map" variant="secondary" onPress={() => router.replace('/(app)')} />;
+        return (
+          <>
+            {lostRental && paymentsSupported ? (
+              <GradientButton
+                label={
+                  lostFeeError
+                    ? 'Try again'
+                    : `Lost it? Pay ${formatMoney(lostRental.buyoutCents, lostRental.currency ?? 'usd')}`
+                }
+                loading={payingLostFee}
+                onPress={() => {
+                  blockedTap('RENTAL_OPEN');
+                  void (async () => {
+                    if (await payLostFee(lostRental.rentalId)) reset();
+                  })();
+                }}
+              />
+            ) : null}
+            <Button
+              label="Back to map"
+              variant="secondary"
+              disabled={payingLostFee}
+              onPress={() => router.replace('/(app)')}
+            />
+          </>
+        );
       case 'NO_PROFILE':
         return (
           <GradientButton
@@ -233,11 +250,15 @@ export default function StationScreen() {
 
   const message = busy
     ? 'Releasing your power bank…'
-    : failure && !refused
-      ? failure.message
-      : reason && gate.step === 'ready'
-        ? (failure?.message ?? data.reasonMessage)
-        : null;
+    : lostFee.phase === 'confirming'
+      ? 'Confirming your payment…'
+      : lostFeeError
+        ? lostFeeError
+        : failure && !refused
+          ? failure.message
+          : reason && gate.step === 'ready'
+            ? (failure?.message ?? data.reasonMessage)
+            : null;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -257,32 +278,8 @@ export default function StationScreen() {
       >
         <Image source={stationImage} style={styles.image} resizeMode="contain" />
 
-        {unlockState.phase === 'released' ? (
-          <View style={styles.block}>
-            <MembershipChip />
-            <Text style={styles.headline}>Take your power bank</Text>
-            <Text muted>
-              {unlockState.rental.slot != null
-                ? `It's in slot ${unlockState.rental.slot}, lit up on the station.`
-                : 'It just popped out of the station.'}
-            </Text>
-            {unlockState.rental.maxRentHours ? (
-              <Text muted>
-                {`Return it to any CUUB station within ${hoursLabel(unlockState.rental.maxRentHours)}.`}
-                {unlockState.rental.buyoutCents != null
-                  ? ` After that, it's yours for ${formatMoney(unlockState.rental.buyoutCents, unlockState.rental.currency ?? 'usd')}.`
-                  : ''}
-              </Text>
-            ) : null}
-          </View>
-        ) : unlockState.phase === 'slow' ? (
-          <View style={styles.block}>
-            <Text style={styles.headline}>Still releasing…</Text>
-            <Text muted>
-              The station is taking longer than usual. Check the slots; your rental shows on the map once it's out.
-              If nothing comes out, it's canceled automatically and you're not charged.
-            </Text>
-          </View>
+        {unlockState.phase === 'released' || unlockState.phase === 'slow' ? (
+          <UnlockOutcome state={unlockState} />
         ) : (
           <View style={styles.block}>
             {member ? <MembershipChip label="Member" /> : null}
@@ -298,16 +295,16 @@ export default function StationScreen() {
         )}
 
         {message ? (
-          <Text variant="caption" color={failure ? colors.danger : colors.muted}>
+          <Text variant="caption" color={failure || lostFeeError ? colors.danger : colors.muted}>
             {message}
           </Text>
         ) : null}
 
         <View style={{ gap: spacing[3] }}>
           {renderAction()}
-          {unlockState.phase === 'idle' && member && maxHours ? (
+          {unlockState.phase === 'idle' && member && reason !== 'RENTAL_OPEN' ? (
             <Text variant="caption" muted center>
-              {`Included in your membership. Keep it up to ${hoursLabel(maxHours)}.`}
+              Included in your membership. Keep it as long as you need.
             </Text>
           ) : null}
           <Text variant="caption" muted center>

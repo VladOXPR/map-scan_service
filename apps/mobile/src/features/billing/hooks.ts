@@ -18,7 +18,7 @@ export function billingKey(userId: string | undefined) {
   return ['billing', userId ?? 'signed-out'] as const;
 }
 
-/** Membership, plan on sale and any unpaid buyout for the signed-in person. */
+/** Membership and plan on sale for the signed-in person. */
 export function useBilling() {
   const session = useAuthStore((s) => s.session);
   const query = useQuery({

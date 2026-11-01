@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Application from 'expo-application';
+import * as Battery from 'expo-battery';
 import * as Localization from 'expo-localization';
 import * as Network from 'expo-network';
 import * as SecureStore from 'expo-secure-store';
@@ -25,6 +26,11 @@ const platform: AnalyticsPlatform =
 let token: string | null = null;
 let membership: MembershipStatus | null = null;
 let network: string | null = null;
+let battery: { level: number | null; charging: boolean | null; lowPower: boolean | null } = {
+  level: null,
+  charging: null,
+  lowPower: null,
+};
 
 const queueStorage: TrackerStorage = {
   getItem: (key) => AsyncStorage.getItem(key),
@@ -100,6 +106,9 @@ export const tracker = createTracker({
       membership,
       hasLocationPermission: permission === 'undetermined' ? null : granted,
       geohash: granted && coords ? encodeGeohash(coords.latitude, coords.longitude, 6) : null,
+      batteryLevel: battery.level,
+      batteryCharging: battery.charging,
+      lowPowerMode: battery.lowPower,
     };
   },
   onError: (error, where) => {
@@ -140,6 +149,52 @@ export function watchNetwork(): void {
     .then((state) => apply(state.type))
     .catch(() => undefined);
   Network.addNetworkStateListener((state) => apply(state.type));
+}
+
+/** Simulators report -1 for an unknown level. */
+function batteryPercent(level: number): number | null {
+  return level >= 0 && level <= 1 ? Math.round(level * 100) : null;
+}
+
+function isCharging(state: Battery.BatteryState): boolean | null {
+  if (state === Battery.BatteryState.UNKNOWN) return null;
+  return state !== Battery.BatteryState.UNPLUGGED;
+}
+
+/**
+ * Reads the battery once, bounded so analytics never waits on it. The tracker
+ * copies the reading onto a session when it opens, so call this before
+ * `tracker.start()` / `tracker.foreground()`.
+ */
+export async function refreshBattery(timeoutMs = 300): Promise<void> {
+  if (Platform.OS === 'web') return;
+  const read = Battery.getPowerStateAsync().then(
+    (state) => {
+      battery = {
+        level: batteryPercent(state.batteryLevel),
+        charging: isCharging(state.batteryState),
+        lowPower: state.lowPowerMode,
+      };
+    },
+    () => undefined,
+  );
+  await Promise.race([read, new Promise((resolve) => setTimeout(resolve, timeoutMs))]);
+}
+
+let batteryWatched = false;
+
+export function watchBattery(): void {
+  if (batteryWatched || Platform.OS === 'web') return;
+  batteryWatched = true;
+  Battery.addBatteryLevelListener(({ batteryLevel }) => {
+    battery = { ...battery, level: batteryPercent(batteryLevel) };
+  });
+  Battery.addBatteryStateListener(({ batteryState }) => {
+    battery = { ...battery, charging: isCharging(batteryState) };
+  });
+  Battery.addLowPowerModeListener(({ lowPowerMode }) => {
+    battery = { ...battery, lowPower: lowPowerMode };
+  });
 }
 
 /** Android only: a Play Store install from the website carries `referrer=wv=<id>`. */

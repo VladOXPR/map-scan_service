@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import { Button, MembershipChip, Text } from '@/components/ui';
-import { colors, spacing } from '@/theme';
+import { spacing } from '@/theme';
 import { formatMoney, type Membership } from './api';
 import { useBilling, useManageMembership } from './hooks';
 
@@ -27,7 +27,7 @@ export function MembershipSection({ onBecomeMember }: { onBecomeMember: () => vo
   const data = billing.data;
   if (!data) return null;
 
-  const { membership, plan, unpaidBuyout } = data;
+  const { membership, plan } = data;
   const card = cardLabel(membership.card);
   const renewal = membership.currentPeriodEnd
     ? new Date(membership.currentPeriodEnd).toLocaleDateString(undefined, {
@@ -76,18 +76,12 @@ export function MembershipSection({ onBecomeMember }: { onBecomeMember: () => vo
         </Text>
       )}
 
-      {unpaidBuyout ? (
-        <Text variant="caption" color={colors.danger}>
-          {`A ${formatMoney(unpaidBuyout.amountCents)} buyout couldn't be charged. Update your card to keep unlocking.`}
-        </Text>
-      ) : null}
-
       {!membership.active && plan ? (
         <Button label="Become a member" onPress={onBecomeMember} />
       ) : null}
-      {hasCustomerRecord && (membership.active || unpaidBuyout || membership.status === 'past_due' || membership.status === 'unpaid') ? (
+      {hasCustomerRecord && (membership.active || membership.status === 'past_due' || membership.status === 'unpaid') ? (
         <Button
-          label={membership.active && !unpaidBuyout ? 'Manage membership' : 'Update card'}
+          label={membership.active ? 'Manage membership' : 'Update card'}
           variant="ghost"
           loading={manage.opening}
           onPress={() => void manage.open()}

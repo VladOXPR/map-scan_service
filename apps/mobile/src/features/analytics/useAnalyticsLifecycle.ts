@@ -5,11 +5,14 @@ import { usePathname } from 'expo-router';
 import { APP_SCHEME, WEB_HANDOFF_PARAM, parseStationLink } from '@cuub/core';
 import {
   linkInstallReferrer,
+  refreshBattery,
   tracker,
+  watchBattery,
   watchGlobalErrors,
   watchNetwork,
 } from '@/lib/analytics';
 import { getLinkHosts } from '@/lib/config';
+import { recordLocationFix } from '@/features/location/fix';
 
 const handledResponses = new Set<string>();
 
@@ -60,8 +63,8 @@ function trackResponse(response: Notifications.NotificationResponse | null): voi
 
 /**
  * Starts the tracker and auto-captures what every screen would otherwise have
- * to: lifecycle, screens, deep links, pushes and crashes. Mounted once in the
- * root layout.
+ * to: lifecycle, screens, deep links, pushes, crashes, and where the phone is
+ * each time the app opens. Mounted once in the root layout.
  */
 export function useAnalyticsLifecycle(): void {
   const pathname = usePathname();
@@ -69,11 +72,30 @@ export function useAnalyticsLifecycle(): void {
   useEffect(() => {
     watchGlobalErrors();
     watchNetwork();
-    void tracker.start().then(() => linkInstallReferrer());
+    watchBattery();
+    void refreshBattery()
+      .then(() => tracker.start())
+      .then(() => {
+        void recordLocationFix('open');
+        return linkInstallReferrer();
+      });
 
+    // 'active' also follows Control Center and system dialogs; only a return from background is an open.
+    let backgrounded = false;
     const appState = AppState.addEventListener('change', (state) => {
-      if (state === 'active') tracker.foreground();
-      else if (state === 'background') tracker.background();
+      if (state === 'background') {
+        backgrounded = true;
+        tracker.background();
+        return;
+      }
+      if (state !== 'active') return;
+      const reopened = backgrounded;
+      backgrounded = false;
+      void refreshBattery().then(() => {
+        if (AppState.currentState !== 'active') return;
+        tracker.foreground();
+        if (reopened) void recordLocationFix('open');
+      });
     });
 
     void Linking.getInitialURL().then(trackLink).catch(() => undefined);

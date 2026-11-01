@@ -10,7 +10,7 @@ export type Membership = {
   amountCents: number | null;
   currency: string | null;
   interval: string | null;
-  maxRentHours: number | null;
+  /** What a lost power bank costs. */
   buyoutCents: number | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
@@ -24,16 +24,13 @@ export type PlanForSale = {
   amountCents: number;
   currency: string;
   interval: string;
-  maxRentHours: number;
+  /** What a lost power bank costs. */
   buyoutCents: number;
 };
-
-export type UnpaidBuyout = { batteryRentId: string; amountCents: number; error: string | null };
 
 export type Billing = {
   membership: Membership;
   plan: PlanForSale | null;
-  unpaidBuyout: UnpaidBuyout | null;
 };
 
 export type SubscriptionSetup = {

@@ -49,7 +49,7 @@ type StationMapProps = {
   showUserLocation?: boolean;
   /**
    * When false (e.g. welcome overlay), hold the home intro.
-   * Flipping to true starts the user → network zoom.
+   * Flipping to true starts the user → closest stations zoom.
    */
   introEnabled?: boolean;
   selectedStationId?: string | null;
@@ -161,7 +161,17 @@ function MapAlignedUserPuck({
   );
 }
 
-function boundsForUserAndNetwork(
+/** The home intro frames the user plus this many of the closest stations. */
+const INTRO_NEAREST_STATIONS = 3;
+
+/** Closest stations to the user, ones that can rent right now first (as Nearest picks). */
+function nearestStations(user: Coordinates, stations: Station[], count: number): Station[] {
+  const byDistance = [...stations].sort((a, b) => distanceMeters(user, a) - distanceMeters(user, b));
+  const usable = (s: Station) => s.locationInactive !== true && s.online !== false;
+  return [...byDistance.filter(usable), ...byDistance.filter((s) => !usable(s))].slice(0, count);
+}
+
+function boundsForUserAndStations(
   userCoords: Coordinates | null,
   stations: Station[],
 ): { ne: [number, number]; sw: [number, number] } | null {
@@ -200,7 +210,7 @@ function boundsForUserAndNetwork(
   };
 }
 
-function networkOverviewPadding(insetTop: number) {
+function introPadding(insetTop: number) {
   const { width: screenW, height: screenH } = Dimensions.get('window');
   return {
     paddingTop: Math.max(insetTop, 12) + 72,
@@ -290,7 +300,7 @@ export function StationMap({
   const shapeRef = useRef<ShapeSource>(null);
   const handledPressRef = useRef(false);
   const hitTargetsEnabledRef = useRef(false);
-  /** One-shot home intro: user-centered → network overview. */
+  /** One-shot home intro: user-centered → user + closest stations. */
   const introPlayedRef = useRef(false);
   /** True after the initial center-on-user frame (zoom-out may still be pending). */
   const introCenteredRef = useRef(false);
@@ -448,7 +458,7 @@ export function StationMap({
 
   /**
    * Home load: frame the puck first, then after 1s fly out so the user +
-   * whole station network fit the viewport.
+   * the closest stations fit the viewport.
    * Waits for `introEnabled` so login welcome doesn't hide the animation.
    * Zoom-out is only marked complete when it fires — so a stations refetch
    * mid-timer can reschedule instead of skipping the fly-out forever.
@@ -459,7 +469,7 @@ export function StationMap({
     if (!userCoords || !stations.length) return;
     if (cameraFit) return;
 
-    const padding = networkOverviewPadding(insets.top);
+    const padding = introPadding(insets.top);
 
     if (!introCenteredRef.current) {
       introCenteredRef.current = true;
@@ -474,7 +484,10 @@ export function StationMap({
     }
 
     const timer = setTimeout(() => {
-      const bounds = boundsForUserAndNetwork(userCoords, stations);
+      const bounds = boundsForUserAndStations(
+        userCoords,
+        nearestStations(userCoords, stations, INTRO_NEAREST_STATIONS),
+      );
       if (!bounds) return;
 
       introPlayedRef.current = true;
@@ -652,7 +665,7 @@ export function StationMap({
         ref={cameraRef}
         defaultSettings={{
           centerCoordinate: defaultCenter,
-          // Start close on the puck; intro effect flies out to the network.
+          // Start close on the puck; intro effect flies out to the closest stations.
           zoomLevel: userCoords
             ? mapTokens.stationZoom
             : mapTokens.defaultZoom,

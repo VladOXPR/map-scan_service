@@ -3,6 +3,7 @@ import { AppState, Linking } from 'react-native';
 import * as Location from 'expo-location';
 import { tracker } from '@/lib/analytics';
 import { useLocationStore } from '@/store/locationStore';
+import { readFix, recordLocationFix } from './fix';
 
 type PermissionStatus = 'undetermined' | 'granted' | 'denied';
 
@@ -18,22 +19,8 @@ async function readPosition(): Promise<{
   latitude: number;
   longitude: number;
 } | null> {
-  try {
-    const position = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
-    return {
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-    };
-  } catch {
-    const last = await Location.getLastKnownPositionAsync();
-    if (!last) return null;
-    return {
-      latitude: last.coords.latitude,
-      longitude: last.coords.longitude,
-    };
-  }
+  const fix = await readFix();
+  return fix ? { latitude: fix.latitude, longitude: fix.longitude } : null;
 }
 
 export function useLocationPermission() {
@@ -86,8 +73,12 @@ export function useLocationPermission() {
     tracker.track('location_permission_result', { result: outcome });
 
     if (status === 'granted') {
-      const next = await readPosition();
-      setCoords(next);
+      // The app-open fix was skipped while permission was missing.
+      const fix =
+        existing.status === Location.PermissionStatus.GRANTED
+          ? await readFix()
+          : await recordLocationFix('open');
+      setCoords(fix ? { latitude: fix.latitude, longitude: fix.longitude } : null);
     } else {
       setCoords(null);
     }

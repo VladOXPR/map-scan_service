@@ -14,6 +14,12 @@
         "EXPO_PUBLIC_CUUB_API_URL": "https://platform.cuub.tech"
       }
     },
+    "development-device": {
+      "extends": "development",
+      "ios": {
+        "simulator": false
+      }
+    },
     "preview": {
       "distribution": "internal",
       "ios": {
