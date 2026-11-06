@@ -33,7 +33,7 @@ Both clients use `Station` from `@cuub/core`: one pin per venue, `id` = cuub-api
 Each kiosk shows `https://<LINK_HOST>/s/<public_code>` (8-char Crockford base32 code from `stations.public_code`).
 
 - App installed: iOS universal links / Android app links open the app on the station screen with an **Unlock** button.
-- App not installed: the website's `/s/<code>` page shows the station and sends the visitor to the App Store or Google Play.
+- App not installed: the website's `/s/<code>` page redirects iPhones and iPads to the App Store and Android phones to Google Play (with the `wv` install referrer), recording the scan server-side. Other browsers see the station landing page.
 - `apps/web` serves `/.well-known/apple-app-site-association` and `/.well-known/assetlinks.json` for the link host.
 
 ## Environment
