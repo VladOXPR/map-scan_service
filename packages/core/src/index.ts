@@ -2,6 +2,7 @@ export * from "./types";
 export * from "./geo";
 export * from "./map";
 export * from "./stations";
+export * from "./hours";
 export * from "./nearest";
 export * from "./api";
 export * from "./directions";

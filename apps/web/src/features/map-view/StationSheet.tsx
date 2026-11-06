@@ -13,6 +13,8 @@ export interface StationSheetProps {
   open: boolean;
   /** Origin for the distance pill (user location, or a searched address). */
   distanceFrom: Coords | null;
+  /** Clock for the venue's open/closed state; without it opening hours are ignored. */
+  now?: Date;
   onRequestClose: () => void;
   onClosed?: () => void;
   onVisibleHeightChange?: (px: number) => void;
@@ -22,11 +24,12 @@ export function StationSheet({
   station,
   open,
   distanceFrom,
+  now,
   onRequestClose,
   onClosed,
   onVisibleHeightChange,
 }: StationSheetProps) {
-  const details = station ? getStationDetails(station) : null;
+  const details = station ? getStationDetails(station, now) : null;
   const distanceLabel =
     details?.coords && distanceFrom
       ? formatMiles(distanceMiles(distanceFrom, details.coords))
@@ -81,7 +84,15 @@ export function StationSheet({
           </div>
 
           <GradientButton
-            label={details.unavailable ? "Location Inactive" : "Get Directions"}
+            label={
+              details.closedNow
+                ? details.opensLabel
+                  ? `Closed · ${details.opensLabel}`
+                  : "Closed Now"
+                : details.unavailable
+                  ? "Location Inactive"
+                  : "Get Directions"
+            }
             disabled={details.unavailable}
             onClick={() => openDirections(station)}
           />

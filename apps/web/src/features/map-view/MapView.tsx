@@ -40,6 +40,7 @@ import {
   zoomForHorizontalSpan,
 } from "./camera";
 import { useGeolocation } from "./useGeolocation";
+import { useMinuteClock } from "./useMinuteClock";
 import { StationSheet } from "./StationSheet";
 import { BottomDock, SupportButton } from "./MapChrome";
 import { LocationSheet } from "./LocationSheet";
@@ -72,13 +73,13 @@ function readSafeAreaTop(): number {
   return px;
 }
 
-/** Closest station that can actually rent (online, active venue). */
-function pickNearest(from: Coords | null, stations: Station[]): Station | null {
+/** Closest station that can actually rent (online, active venue, open at `now`). */
+function pickNearest(from: Coords | null, stations: Station[], now: Date): Station | null {
   if (!from) return null;
   let best: Station | null = null;
   let bestMiles = Infinity;
   for (const station of stations) {
-    if (isStationUnavailable(station)) continue;
+    if (isStationUnavailable(station, now)) continue;
     const c = stationCoords(station);
     if (!c) continue;
     const miles = distanceMiles(from, c);
@@ -303,7 +304,11 @@ export function MapView({
     [cancelIntro, clearRoute]
   );
 
-  const nearestStation = useMemo(() => pickNearest(coords, stations), [coords, stations]);
+  const now = useMinuteClock();
+  const nearestStation = useMemo(
+    () => pickNearest(coords, stations, now),
+    [coords, stations, now]
+  );
 
   /**
    * Shared open path for pin taps and Nearest. The nearest station (or an
@@ -346,7 +351,7 @@ export function MapView({
 
   const runNearest = useCallback(
     (from: Coords) => {
-      const station = pickNearest(from, stationsRef.current);
+      const station = pickNearest(from, stationsRef.current, new Date());
       if (!station) {
         showToast("No stations nearby yet");
         return;
@@ -417,7 +422,7 @@ export function MapView({
       await loadStationIcons(map);
       if (removed || map.getSource("stations")) return;
 
-      addStationLayers(map, stationsToGeoJSON(stationsRef.current, null), {
+      addStationLayers(map, stationsToGeoJSON(stationsRef.current, null, new Date()), {
         highlightSelected: full,
       });
       addOverlayLayers(map);
@@ -481,9 +486,9 @@ export function MapView({
     if (!map || !layersReady) return;
     const source = map.getSource("stations") as mapboxgl.GeoJSONSource | undefined;
     source?.setData(
-      stationsToGeoJSON(stations, pinSelectedId) as unknown as GeoJSON.FeatureCollection
+      stationsToGeoJSON(stations, pinSelectedId, now) as unknown as GeoJSON.FeatureCollection
     );
-  }, [map, layersReady, stations, pinSelectedId]);
+  }, [map, layersReady, stations, pinSelectedId, now]);
 
   const showPuck = permission === "granted" && !!coords;
 
@@ -622,6 +627,7 @@ export function MapView({
         station={selectedStation}
         open={sheetOpen}
         distanceFrom={coords}
+        now={now}
         onRequestClose={closeSheet}
         onClosed={onSheetClosed}
         onVisibleHeightChange={setSheetHeight}
