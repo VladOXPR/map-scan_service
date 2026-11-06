@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type mapboxgl from "mapbox-gl";
+import { DEFAULT_TIMEZONE, WEEKDAYS, localTime } from "@cuub/core";
 import { cuubClient } from "@/lib/cuubClient";
-import { chicagoNow, formatWindow, isOpenNow, type ChicagoNow } from "./openNow";
+import { formatWindow, isOpenNow } from "./openNow";
 import type { RouteLocation } from "./types";
 import styles from "./route.module.css";
 
@@ -66,7 +67,7 @@ function placeLocations(locations: RouteLocation[]): {
   return { placed, groups };
 }
 
-function toGeoJSON(placed: PlacedLocation[], now: ChicagoNow): GeoJSON.FeatureCollection {
+function toGeoJSON(placed: PlacedLocation[], now: Date): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
     features: placed.map(({ location, groupKey, lng, lat }) => ({
@@ -93,7 +94,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-function buildPopupContent(members: RouteLocation[], now: ChicagoNow): HTMLElement {
+function buildPopupContent(members: RouteLocation[], now: Date): HTMLElement {
   const root = document.createElement("div");
   for (const location of members) {
     const item = el("div", styles.popupItem);
@@ -108,8 +109,8 @@ function buildPopupContent(members: RouteLocation[], now: ChicagoNow): HTMLEleme
     if (!hours || hours.hours_unknown) {
       item.appendChild(el("div", styles.hoursLine, "Hours not available"));
     } else {
-      item.appendChild(el("div", styles.hoursLine, `Tue: ${formatWindow(hours.tue)}`));
-      item.appendChild(el("div", styles.hoursLine, `Wed: ${formatWindow(hours.wed)}`));
+      item.appendChild(el("div", styles.hoursLine, `Tue: ${formatWindow(hours, "tue")}`));
+      item.appendChild(el("div", styles.hoursLine, `Wed: ${formatWindow(hours, "wed")}`));
     }
     if (hours?.note) item.appendChild(el("div", styles.note, hours.note));
 
@@ -130,7 +131,7 @@ export function RouteMapView({ locations }: RouteMapViewProps) {
   const [map, setMap] = useState<mapboxgl.Map | null>(null);
   const [mapboxgl, setMapboxgl] = useState<MapboxModule | null>(null);
   const [layersReady, setLayersReady] = useState(false);
-  const [now, setNow] = useState<ChicagoNow>(() => chicagoNow());
+  const [now, setNow] = useState(() => new Date());
   const [error, setError] = useState<string | null>(null);
 
   const { placed, groups } = useMemo(() => placeLocations(locations), [locations]);
@@ -140,7 +141,7 @@ export function RouteMapView({ locations }: RouteMapViewProps) {
   groupsRef.current = groups;
 
   useEffect(() => {
-    const id = setInterval(() => setNow(chicagoNow()), RECOMPUTE_MS);
+    const id = setInterval(() => setNow(new Date()), RECOMPUTE_MS);
     return () => clearInterval(id);
   }, []);
 
@@ -255,10 +256,12 @@ export function RouteMapView({ locations }: RouteMapViewProps) {
   }, [map, layersReady, placed, groups, now]);
 
   const updatedLabel = useMemo(() => {
-    const h = Math.floor(now.minutes / 60);
-    const m = now.minutes % 60;
+    const local = localTime(now, DEFAULT_TIMEZONE);
+    const h = Math.floor(local.minutes / 60);
+    const m = local.minutes % 60;
     const h12 = h % 12 === 0 ? 12 : h % 12;
-    const day = now.weekday.charAt(0).toUpperCase() + now.weekday.slice(1);
+    const weekday = WEEKDAYS[local.day];
+    const day = weekday.charAt(0).toUpperCase() + weekday.slice(1);
     return `${day} ${h12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"} Chicago`;
   }, [now]);
 
