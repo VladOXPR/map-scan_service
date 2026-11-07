@@ -2,7 +2,7 @@
   "expo": {
     "name": "CUUB",
     "slug": "cuub-user-app",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./App_Icon.png",
     "scheme": "cuub",
@@ -11,9 +11,10 @@
       "supportsTablet": false,
       "bundleIdentifier": "tech.cuub.user",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "CUUB uses your location to show nearby battery stations, alert you when your phone battery is low and a station is close by, and learn where people need a charge so we can add stations there.",
+        "NSLocationWhenInUseUsageDescription": "CUUB uses your location to show nearby battery stations, alert you when your phone battery is low and a station is close by, and learn where people need a charge so we can add stations there. With return alerts on, CUUB also uses it while you have a power bank to tell you when you pass a station with an open slot; that route stays on your phone.",
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
+          "location",
           "processing",
           "remote-notification"
         ],
@@ -54,9 +55,12 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
-        "POST_NOTIFICATIONS",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "POST_NOTIFICATIONS"
+      ],
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
@@ -77,7 +81,11 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "CUUB uses your location to show nearby battery stations, alert you when your phone battery is low and a station is close by, and learn where people need a charge so we can add stations there."
+          "locationWhenInUsePermission": "CUUB uses your location to show nearby battery stations, alert you when your phone battery is low and a station is close by, and learn where people need a charge so we can add stations there. With return alerts on, CUUB also uses it while you have a power bank to tell you when you pass a station with an open slot; that route stays on your phone.",
+          "locationAlwaysAndWhenInUsePermission": "CUUB uses your location to show nearby battery stations, alert you when your phone battery is low and a station is close by, and learn where people need a charge so we can add stations there. With return alerts on, CUUB also uses it while you have a power bank to tell you when you pass a station with an open slot; that route stays on your phone.",
+          "locationAlwaysPermission": "CUUB uses your location to show nearby battery stations, alert you when your phone battery is low and a station is close by, and learn where people need a charge so we can add stations there. With return alerts on, CUUB also uses it while you have a power bank to tell you when you pass a station with an open slot; that route stays on your phone.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       [
@@ -107,6 +115,12 @@
       ],
       "@react-native-community/datetimepicker"
     ],
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c8e8797e-0a9e-4564-882b-49a6f2e6f528"
+    },
     "experiments": {
       "typedRoutes": true
     },

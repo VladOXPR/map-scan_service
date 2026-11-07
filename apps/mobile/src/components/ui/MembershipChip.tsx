@@ -5,7 +5,7 @@ import { colors, radius, rentTypeColors, spacing } from '@/theme';
 
 /** Membership (subscription) rentals and members are blue on every surface. */
 export function MembershipChip({
-  label = 'Membership',
+  label = 'Pass',
   style,
 }: {
   label?: string;

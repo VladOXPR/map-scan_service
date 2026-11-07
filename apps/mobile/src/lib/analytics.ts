@@ -19,6 +19,8 @@ import { getApiBaseUrl } from './config';
 
 const REFERRER_CHECKED_KEY = 'cuub.analytics.referrerChecked';
 const POSTHOG_DEFAULT_HOST = 'https://us.i.posthog.com';
+/** Coming back after this long away starts a new session; every open records a location fix regardless. */
+const SESSION_REOPEN_MS = 60_000;
 
 const platform: AnalyticsPlatform =
   Platform.OS === 'android' ? 'android' : Platform.OS === 'web' ? 'web' : 'ios';
@@ -91,6 +93,7 @@ export const tracker = createTracker({
   getToken: () => token,
   posthog: createPostHog,
   hardwareHint,
+  sessionReopenMs: SESSION_REOPEN_MS,
   context: () => {
     const { permission, coords } = useLocationStore.getState();
     const granted = permission === 'granted';

@@ -115,6 +115,7 @@ export const FORBIDDEN_PROPERTY_KEYS: ReadonlySet<string> = new Set([
   "name",
   "dateOfBirth",
   "dob",
+  "age",
   "code",
   "otp",
 ]);
@@ -122,8 +123,8 @@ export const FORBIDDEN_PROPERTY_KEYS: ReadonlySet<string> = new Set([
 export type PropertyValue = string | number | boolean | null;
 export type EventProperties = Record<string, PropertyValue | undefined>;
 
-/** What prompted a location fix: a new session starting, or a Nearest tap. */
-export const LOCATION_TRIGGERS = ["open", "find_nearest"] as const;
+/** What prompted a location fix: the app opening or coming back from the background, a Nearest tap, or an unlock request. */
+export const LOCATION_TRIGGERS = ["open", "find_nearest", "unlock"] as const;
 export type LocationTrigger = (typeof LOCATION_TRIGGERS)[number];
 
 export type DeeplinkSource = "qr_scan" | "universal_link" | "push" | "web_handoff";
@@ -153,7 +154,7 @@ export interface FunnelEventProperties {
   profile_viewed: { trigger: "signup" | "unlock" | "account" };
   profile_submitted: { ageBracket: string };
   profile_rejected: { reason: string };
-  paywall_viewed: { trigger: "unlock" | "account" | "station"; stationCode?: string };
+  paywall_viewed: { trigger: "unlock" | "account" | "station" | "signup"; stationCode?: string };
   paywall_cta_tapped: { planId?: string };
   payment_sheet_opened: { planId?: string };
   payment_sheet_result: {
@@ -163,7 +164,7 @@ export interface FunnelEventProperties {
   };
   membership_active_seen: { status: MembershipStatus };
   manage_membership_tapped: Record<string, never>;
-  scanner_opened: { entry: "map" | "station" | "rental_card" };
+  scanner_opened: { entry: "map" | "station" | "rental_card" | "membership" };
   qr_scanned: { valid: boolean; stationCode?: string };
   station_viewed: { stationCode: string; canUnlock: boolean | null; reason?: string | null; entry?: DeeplinkSource | "map" };
   unlock_tapped: { stationCode: string };
@@ -186,17 +187,9 @@ export type PropertiesFor<N extends AnalyticsEventName> = N extends keyof Funnel
   ? FunnelEventProperties[N] & EventProperties
   : EventProperties;
 
-/** Coarse bracket for PostHog person properties; the birth date never leaves the device. */
-export function ageBracket(dateOfBirth: string | Date | null | undefined, now: Date = new Date()): string | null {
-  if (!dateOfBirth) return null;
-  const dob = typeof dateOfBirth === "string" ? new Date(`${dateOfBirth.slice(0, 10)}T00:00:00Z`) : dateOfBirth;
-  if (Number.isNaN(dob.getTime())) return null;
-  let age = now.getUTCFullYear() - dob.getUTCFullYear();
-  const beforeBirthday =
-    now.getUTCMonth() < dob.getUTCMonth() ||
-    (now.getUTCMonth() === dob.getUTCMonth() && now.getUTCDate() < dob.getUTCDate());
-  if (beforeBirthday) age -= 1;
-  if (age < 13) return null;
+/** Coarse bracket for PostHog person properties; the exact age never leaves the device. */
+export function ageBracket(age: number | null | undefined): string | null {
+  if (age == null || !Number.isFinite(age) || age < 13) return null;
   if (age < 18) return "13-17";
   if (age < 25) return "18-24";
   if (age < 35) return "25-34";

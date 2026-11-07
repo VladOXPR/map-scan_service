@@ -92,11 +92,13 @@ export interface TrackerConfig {
   flushAt?: number;
   maxQueueSize?: number;
   sessionIdleMs?: number;
+  /** Time away (in the background or closed) after which coming back opens a new session. Defaults to `sessionIdleMs`. */
+  sessionReopenMs?: number;
   onError?: (error: unknown, where: string) => void;
 }
 
 export interface Tracker {
-  /** `newSession` is false when the app relaunched inside the last session's idle window. */
+  /** `newSession` is false when the app relaunched inside the reopen window. */
   start(): Promise<{ newSession: boolean }>;
   getDeviceId(): string | null;
   getSessionId(): string | null;
@@ -253,6 +255,7 @@ export function createTracker(config: TrackerConfig): Tracker {
   const flushAt = config.flushAt ?? 20;
   const maxQueue = config.maxQueueSize ?? 1000;
   const idleMs = config.sessionIdleMs ?? 30 * 60_000;
+  const reopenMs = config.sessionReopenMs ?? idleMs;
   const flushIntervalMs = config.flushIntervalMs ?? 10_000;
   const report = (error: unknown, where: string) => config.onError?.(error, where);
   /** PostHog SDK calls may throw or return a rejecting promise; neither may break tracking. */
@@ -695,7 +698,7 @@ export function createTracker(config: TrackerConfig): Tracker {
       const at = now();
       if (session) {
         const lastSeen = session.backgroundedAt ?? session.lastActiveAt;
-        if (at - lastSeen > idleMs) {
+        if (at - lastSeen > reopenMs) {
           closeSession(lastSeen, session.converted ? "converted" : "abandoned");
         } else {
           session.backgroundedAt = null;
@@ -815,7 +818,7 @@ export function createTracker(config: TrackerConfig): Tracker {
         }
         let newSession = !resumed;
         if (resumed && resumed.backgroundedAt !== null) {
-          if (at - resumed.backgroundedAt > idleMs) {
+          if (at - resumed.backgroundedAt > reopenMs) {
             closeSession(resumed.backgroundedAt, resumed.converted ? "converted" : "abandoned");
             newSession = true;
           } else {

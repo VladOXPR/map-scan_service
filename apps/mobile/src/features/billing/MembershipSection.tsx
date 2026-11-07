@@ -1,5 +1,5 @@
 import { StyleSheet, View } from 'react-native';
-import { Button, MembershipChip, Text } from '@/components/ui';
+import { Button, GradientButton, MembershipChip, Text } from '@/components/ui';
 import { spacing } from '@/theme';
 import { formatMoney, type Membership } from './api';
 import { useBilling, useManageMembership } from './hooks';
@@ -8,7 +8,7 @@ const STATUS_COPY: Partial<Record<Membership['status'], string>> = {
   past_due: 'Payment failed. Update your card to keep unlocking.',
   unpaid: 'Payment failed. Update your card to keep unlocking.',
   incomplete: 'Checkout was not finished.',
-  canceled: 'Your membership has ended.',
+  canceled: 'Your Pass has ended.',
 };
 
 function cardLabel(card: Membership['card']): string | null {
@@ -40,8 +40,8 @@ export function MembershipSection({ onBecomeMember }: { onBecomeMember: () => vo
   return (
     <View style={styles.root}>
       <View style={styles.row}>
-        <Text variant="subtitle">Membership</Text>
-        {membership.active ? <MembershipChip label="Member" /> : null}
+        <Text variant="subtitle">CUUB Pass</Text>
+        {membership.active ? <MembershipChip label="Active" /> : null}
       </View>
 
       {membership.active ? (
@@ -72,16 +72,16 @@ export function MembershipSection({ onBecomeMember }: { onBecomeMember: () => vo
           {STATUS_COPY[membership.status] ??
             (plan
               ? `Unlimited rentals for ${formatMoney(plan.amountCents, plan.currency)}/${plan.interval}.`
-              : 'Memberships are coming soon.')}
+              : 'CUUB Pass is coming soon.')}
         </Text>
       )}
 
       {!membership.active && plan ? (
-        <Button label="Become a member" onPress={onBecomeMember} />
+        <GradientButton label="Get Pass" onPress={onBecomeMember} />
       ) : null}
       {hasCustomerRecord && (membership.active || membership.status === 'past_due' || membership.status === 'unpaid') ? (
         <Button
-          label={membership.active ? 'Manage membership' : 'Update card'}
+          label={membership.active ? 'Manage Pass' : 'Update card'}
           variant="ghost"
           loading={manage.opening}
           onPress={() => void manage.open()}

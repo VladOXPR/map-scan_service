@@ -372,6 +372,28 @@ test("start and foreground say whether a new session began, which is when the ap
   assert.deepEqual(await later.tracker.start(), { newSession: true });
 });
 
+test("a short reopen window makes each return a new session, while time on screen still uses the idle window", async () => {
+  const storage = new MemoryStorage();
+  const h = harness({ storage, sessionReopenMs: 60_000 });
+  await h.tracker.start();
+  const first = h.tracker.getSessionId();
+  h.tracker.background();
+  h.clock.t += 30_000;
+  assert.deepEqual(await h.tracker.foreground(), { newSession: false }, "a glance away resumes");
+  h.clock.t += 10 * 60_000;
+  h.tracker.track("map_loaded", { stations: 3 });
+  assert.equal(h.tracker.getSessionId(), first, "ten minutes on screen is one session");
+  h.tracker.background();
+  h.clock.t += 2 * 60_000;
+  assert.deepEqual(await h.tracker.foreground(), { newSession: true });
+  assert.notEqual(h.tracker.getSessionId(), first);
+  h.tracker.background();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const relaunched = harness({ storage, sessionReopenMs: 60_000, clock: { t: h.clock.t + 2 * 60_000 } });
+  assert.deepEqual(await relaunched.tracker.start(), { newSession: true }, "a relaunch minutes later is a new open");
+});
+
 test("a location fix that fails to send is retried, and a bad reading is ignored", async () => {
   let fail = true;
   const h = harness({ respond: (call) => (call.url.endsWith("/location") && fail ? 503 : 200) });
@@ -431,12 +453,12 @@ test("sanitizeProperties keeps flat values and drops the rest", () => {
 });
 
 test("ageBracket buckets ages and never returns under 13", () => {
-  const now = new Date("2026-10-21T00:00:00Z");
-  assert.equal(ageBracket("2013-10-22", now), null);
-  assert.equal(ageBracket("2013-10-21", now), "13-17");
-  assert.equal(ageBracket("1995-01-01", now), "25-34");
-  assert.equal(ageBracket("1960-05-05", now), "55+");
-  assert.equal(ageBracket("not a date", now), null);
+  assert.equal(ageBracket(12), null);
+  assert.equal(ageBracket(13), "13-17");
+  assert.equal(ageBracket(31), "25-34");
+  assert.equal(ageBracket(66), "55+");
+  assert.equal(ageBracket(null), null);
+  assert.equal(ageBracket(Number.NaN), null);
 });
 
 function recorder(): PostHogAdapter & {

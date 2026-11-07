@@ -6,6 +6,7 @@ import { tracker } from '@/lib/analytics';
 import { useAuthStore } from '@/store/authStore';
 import { billingKey } from '@/features/billing/hooks';
 import { useLostPowerBankCheckout } from '@/features/billing/stripe';
+import { recordLocationFix } from '@/features/location/fix';
 import {
   checkoutBuyout,
   fetchActiveRental,
@@ -146,6 +147,7 @@ export function useUnlock(defaultCode?: string) {
     if (!session || !code) return;
     const stationCode = code;
     tracker.track('unlock_tapped', { stationCode });
+    void recordLocationFix('unlock');
     const startedAt = Date.now();
     attemptId.current ??= defaultUUID();
     setState({ phase: 'requesting' });
@@ -255,8 +257,7 @@ export function usePayLostPowerBank() {
 
       if (current.status === 'requires_payment') {
         setState({ phase: 'paying' });
-        const name = [session.user.firstName, session.user.lastName].filter(Boolean).join(' ');
-        const outcome = await checkout(current, { name: name || null, phone: session.user.phone });
+        const outcome = await checkout(current, { name: session.user.name, phone: session.user.phone });
         if (outcome.result === 'canceled') {
           setState({ phase: 'idle' });
           return false;

@@ -53,11 +53,11 @@ export type SubscribeState =
   | { phase: 'error'; message: string };
 
 const ERROR_COPY: Record<string, string> = {
-  ALREADY_SUBSCRIBED: 'You already have an active membership.',
-  NO_PROFILE: 'Finish your profile before starting a membership.',
-  NO_PLAN: 'Memberships are not available right now. Try again later.',
+  ALREADY_SUBSCRIBED: 'You already have an active Pass.',
+  NO_PROFILE: 'Finish your profile before getting a Pass.',
+  NO_PLAN: 'CUUB Pass is not available right now. Try again later.',
   stripe_not_configured: 'Payments are not set up in this build.',
-  unsupported_platform: 'Get the CUUB app to start a membership.',
+  unsupported_platform: 'Get the CUUB app to get a Pass.',
 };
 
 function errorMessage(code: string | undefined, fallback?: string): string {
@@ -87,8 +87,7 @@ export function useSubscribe() {
         const setup = await startSubscription(session.token);
         setState({ phase: 'paying' });
         tracker.track('payment_sheet_opened', { planId });
-        const name = [session.user.firstName, session.user.lastName].filter(Boolean).join(' ');
-        outcome = await checkout(setup, plan, { name: name || null, phone: session.user.phone });
+        outcome = await checkout(setup, plan, { name: session.user.name, phone: session.user.phone });
       } catch (error) {
         const code = error instanceof ApiError ? error.code : undefined;
         if (code === 'ALREADY_SUBSCRIBED') {
@@ -135,7 +134,7 @@ export function useSubscribe() {
       }
       setState({
         phase: 'error',
-        message: 'Payment received. Your membership is still activating; pull to refresh in a moment.',
+        message: 'Payment received. Your Pass is still activating; pull to refresh in a moment.',
       });
       return false;
     },

@@ -9,3 +9,6 @@ export * from './LoadingState';
 export * from './EmptyState';
 export * from './Screen';
 export * from './MembershipChip';
+export * from './BatteryIcon';
+export * from './QrTapIcon';
+export * from './WheelPicker';

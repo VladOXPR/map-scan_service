@@ -5,6 +5,7 @@ import { syncExpoPushToken } from '@/features/alerts/registerExpoPushToken';
 import { useLowBatteryAlerts } from '@/features/alerts/useLowBatteryAlerts';
 import { usePushNavigation } from '@/features/alerts/usePushNavigation';
 import { useBilling } from '@/features/billing/hooks';
+import { parseTileParam } from '@/components/overlays/MapChrome';
 import { useAuthStore } from '@/store/authStore';
 import { LoadingState } from '@/components/ui';
 import { colors } from '@/theme';
@@ -40,9 +41,14 @@ export default function AppLayout() {
     >
       <Stack.Screen name="index" />
       <Stack.Screen name="s/[code]" options={{ animation: 'slide_from_bottom' }} />
+      {/* Opened from the unlock button, the scanner draws its own entrance over the map: the page grows out of its QR tile. */}
       <Stack.Screen
         name="scan"
-        options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+        options={({ route }) => ({
+          presentation: 'transparentModal',
+          contentStyle: { backgroundColor: 'transparent' },
+          animation: parseTileParam((route.params as { tile?: string } | undefined)?.tile) ? 'none' : 'fade',
+        })}
       />
       <Stack.Screen
         name="membership"

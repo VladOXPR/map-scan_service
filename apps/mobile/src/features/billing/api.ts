@@ -59,13 +59,17 @@ export async function billingPortalUrl(token: string): Promise<string> {
   return data.url;
 }
 
-export function formatMoney(cents: number | null | undefined, currency = 'usd'): string {
+export function formatMoney(
+  cents: number | null | undefined,
+  currency = 'usd',
+  options: { showCents?: boolean } = {},
+): string {
   if (cents == null) return '';
   try {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency.toUpperCase(),
-      minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
+      minimumFractionDigits: options.showCents || cents % 100 !== 0 ? 2 : 0,
     }).format(cents / 100);
   } catch {
     return `$${(cents / 100).toFixed(2)}`;

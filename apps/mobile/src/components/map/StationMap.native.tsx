@@ -59,6 +59,8 @@ type StationMapProps = {
   cameraZoom?: number;
   /** Fit camera with user left / station right (Nearest CUUB). */
   cameraFit?: CameraFitRequest | null;
+  /** Walking route from the user drawn while no station is open (the nearest one). */
+  routeTo?: Coordinates | null;
 };
 
 const PUCK_FILL = '#1F69E1';
@@ -152,7 +154,7 @@ function MapAlignedUserPuck({
         style={{
           ...PITCH_MAP,
           circleRadius: 11,
-          circleColor: '#000000',
+          circleColor: PUCK_FILL,
           circleStrokeColor: '#FFFFFF',
           circleStrokeWidth: 3,
         }}
@@ -295,6 +297,7 @@ export function StationMap({
   cameraTarget,
   cameraZoom,
   cameraFit,
+  routeTo,
 }: StationMapProps) {
   const cameraRef = useRef<Camera>(null);
   const shapeRef = useRef<ShapeSource>(null);
@@ -336,18 +339,31 @@ export function StationMap({
     introCenteredRef.current = true;
   }, [selectedStationId]);
 
+  // An opened station gets its own route (or none, for a pin away from the user); otherwise the standing one.
+  const route = cameraFit?.from
+    ? { from: cameraFit.from, to: cameraFit.to }
+    : !selectedStationId && !cameraFit && routeTo && userCoords
+      ? { from: userCoords, to: routeTo }
+      : null;
+  // Rounded to ~10 m so small location updates don't refetch the same route.
+  const routeKey = route
+    ? [route.from.latitude, route.from.longitude, route.to.latitude, route.to.longitude]
+        .map((n) => n.toFixed(4))
+        .join(',')
+    : null;
+  const routeRef = useRef(route);
+  routeRef.current = route;
+
   useEffect(() => {
-    if (!cameraFit?.from) {
+    const request = routeRef.current;
+    if (!request) {
       setRouteLine(null);
       return;
     }
 
     let cancelled = false;
-    const from = cameraFit.from;
-    const to = cameraFit.to;
-
     void (async () => {
-      const feature = await fetchWalkingRoute(from, to);
+      const feature = await fetchWalkingRoute(request.from, request.to);
       if (cancelled) return;
       setRouteLine(feature);
     })();
@@ -355,7 +371,7 @@ export function StationMap({
     return () => {
       cancelled = true;
     };
-  }, [cameraFit]);
+  }, [routeKey]);
 
   useEffect(() => {
     if (!cameraFit) return;

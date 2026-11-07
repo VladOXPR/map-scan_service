@@ -27,7 +27,13 @@ export function profileHref(options: { trigger: ProfileTrigger; next?: string | 
   } as Href;
 }
 
-export type PaywallTrigger = 'unlock' | 'account' | 'station';
+/** The station a `/s/<code>` return path leads back to. */
+export function stationCodeIn(path: string | null): string | null {
+  const match = path?.match(/^\/s\/([^/?#]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+export type PaywallTrigger = 'unlock' | 'account' | 'station' | 'signup';
 
 export function membershipPath(options: { trigger: PaywallTrigger; stationCode?: string | null }): string {
   const station = options.stationCode ? `&station=${encodeURIComponent(options.stationCode)}` : '';

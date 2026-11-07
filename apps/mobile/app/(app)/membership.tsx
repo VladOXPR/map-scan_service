@@ -17,17 +17,44 @@ import { useBilling, useManageMembership, useSubscribe } from '@/features/billin
 import { paymentsSupported } from '@/features/billing/stripe';
 import { tracker } from '@/lib/analytics';
 import { useAuthStore } from '@/store/authStore';
-import { colors, radius, rentTypeColors, spacing } from '@/theme';
+import { colors, radius, spacing } from '@/theme';
 
 function isTrigger(value: unknown): value is PaywallTrigger {
-  return value === 'unlock' || value === 'account' || value === 'station';
+  return value === 'unlock' || value === 'account' || value === 'station' || value === 'signup';
 }
 
-function Benefit({ children }: { children: string }) {
+const STEP_TILE = 32;
+
+const STEPS = [
+  { title: 'Unlimited Access', body: 'Unlock through the app.' },
+  { title: 'One at a time', body: 'Return then grab another one' },
+  { title: 'Total Freedom', body: 'Take anywhere, go anywhere' },
+] as const;
+
+function Steps() {
   return (
-    <View style={styles.benefit}>
-      <View style={styles.benefitDot} />
-      <Text style={{ flex: 1 }}>{children}</Text>
+    <View style={styles.card}>
+      {STEPS.map((step, i) => {
+        const last = i === STEPS.length - 1;
+        return (
+          <View key={step.title} style={styles.step}>
+            <View style={styles.stepRail}>
+              <View style={styles.stepTile}>
+                <Text style={styles.stepNumber}>{i + 1}</Text>
+              </View>
+              {last ? null : <View style={styles.stepConnector} />}
+            </View>
+            <View style={[styles.stepText, !last && { paddingBottom: spacing[4] }]}>
+              <View style={styles.stepTitleRow}>
+                <Text variant="subtitle" style={{ fontWeight: '700' }}>
+                  {step.title}
+                </Text>
+              </View>
+              <Text muted>{step.body}</Text>
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -62,18 +89,22 @@ export default function MembershipScreen() {
     else router.replace(fallback as Href);
   }, [fallback, router]);
 
+  // A new member goes straight to scanning; one who came from a station goes back to unlock it there.
   useEffect(() => {
     if (state.phase !== 'active') return;
-    const timer = setTimeout(close, 900);
+    const timer = setTimeout(() => {
+      if (stationCode) close();
+      else router.replace({ pathname: '/scan', params: { entry: 'membership' } });
+    }, 900);
     return () => clearTimeout(timer);
-  }, [close, state.phase]);
+  }, [close, router, state.phase, stationCode]);
 
   if (gate.step !== 'ready' || billing.isPending) return <LoadingState />;
 
   if (billing.isError || !billing.data) {
     return (
       <EmptyState
-        title="Couldn't load memberships"
+        title="Couldn't load CUUB Pass"
         description="Check your connection and try again."
         actionLabel="Try again"
         onAction={() => void billing.refetch()}
@@ -111,44 +142,29 @@ export default function MembershipScreen() {
           />
         }
       >
-        <MembershipChip label="CUUB Membership" />
+        <MembershipChip label="Pass" />
 
         {membership.active ? (
           <View style={{ gap: spacing[3] }}>
-            <Text style={styles.headline}>You're a member</Text>
+            <Text style={styles.headline}>You have a Pass</Text>
             <Text muted>
               {membership.cancelAtPeriodEnd && membership.currentPeriodEnd
-                ? `Your membership ends on ${new Date(membership.currentPeriodEnd).toLocaleDateString()}.`
+                ? `Your Pass ends on ${new Date(membership.currentPeriodEnd).toLocaleDateString()}.`
                 : 'Unlock a power bank at any CUUB station at no extra charge.'}
             </Text>
           </View>
         ) : plan ? (
           <View style={{ gap: spacing[3] }}>
-            <Text style={styles.headline}>
-              {trigger === 'unlock' ? 'Become a member to unlock' : 'Charge anywhere, anytime'}
-            </Text>
-            <View style={styles.priceRow}>
-              <Text style={styles.price}>{formatMoney(plan.amountCents, plan.currency)}</Text>
-              <Text muted style={{ marginBottom: 6 }}>
-                / {plan.interval}
-              </Text>
-            </View>
+            <Text style={styles.headline}>Charge anywhere, anytime</Text>
           </View>
         ) : (
           <View style={{ gap: spacing[3] }}>
-            <Text style={styles.headline}>Memberships are coming soon</Text>
+            <Text style={styles.headline}>CUUB Pass is coming soon</Text>
             <Text muted>Check back shortly.</Text>
           </View>
         )}
 
-        {plan && !membership.active ? (
-          <View style={styles.card}>
-            <Benefit>Unlimited rentals, one power bank at a time</Benefit>
-            <Benefit>No timer, no late fees: keep it as long as you need</Benefit>
-            <Benefit>Return to any CUUB station</Benefit>
-            <Benefit>Cancel anytime</Benefit>
-          </View>
-        ) : null}
+        {plan && !membership.active ? <Steps /> : null}
 
         {state.phase === 'error' ? (
           <Text variant="caption" color={colors.danger}>
@@ -160,12 +176,12 @@ export default function MembershipScreen() {
           <View style={{ gap: spacing[3] }}>
             {state.phase === 'active' ? (
               <Text variant="subtitle" color={colors.success}>
-                Membership active
+                Pass active
               </Text>
             ) : null}
             <GradientButton label={stationCode ? 'Back to station' : 'Done'} onPress={close} />
             <Button
-              label="Manage membership"
+              label="Manage Pass"
               variant="ghost"
               loading={manage.opening}
               onPress={() => void manage.open()}
@@ -175,7 +191,11 @@ export default function MembershipScreen() {
           <View style={{ gap: spacing[3] }}>
             {paymentsSupported ? (
               <GradientButton
-                label={state.phase === 'error' ? 'Try again' : 'Continue'}
+                label={
+                  state.phase === 'error'
+                    ? 'Try again'
+                    : `${formatMoney(plan.amountCents, plan.currency, { showCents: true })} / ${plan.interval}`
+                }
                 loading={busy}
                 onPress={() => {
                   if (state.phase === 'error') reset();
@@ -187,7 +207,7 @@ export default function MembershipScreen() {
             )}
             {state.phase === 'activating' ? (
               <Text variant="caption" muted center>
-                Activating your membership…
+                Activating your Pass…
               </Text>
             ) : null}
             <Text variant="caption" muted>
@@ -238,34 +258,46 @@ const styles = StyleSheet.create({
     lineHeight: 34,
     fontWeight: '700',
   },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing[2],
-  },
-  price: {
-    color: colors.white,
-    fontSize: 44,
-    lineHeight: 50,
-    fontWeight: '800',
-  },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing[5],
-    gap: spacing[3],
   },
-  benefit: {
+  step: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: spacing[3],
   },
-  benefitDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: rentTypeColors.subscription,
+  stepRail: {
+    width: STEP_TILE,
+    alignItems: 'center',
+  },
+  stepTile: {
+    width: STEP_TILE,
+    height: STEP_TILE,
+    borderRadius: 10,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepNumber: {
+    color: '#4A5257',
+    fontSize: 17,
+    lineHeight: 20,
+    fontWeight: '800',
+  },
+  stepConnector: {
+    flex: 1,
+    width: 4,
+    marginVertical: 3,
+    backgroundColor: colors.white,
+  },
+  stepText: {
+    flex: 1,
+  },
+  stepTitleRow: {
+    minHeight: STEP_TILE,
+    justifyContent: 'center',
   },
 });

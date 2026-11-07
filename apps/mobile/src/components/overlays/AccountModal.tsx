@@ -115,7 +115,7 @@ export function AccountModal({
                   >
                     <Text variant="subtitle">Complete your profile</Text>
                     <Text variant="caption" muted>
-                      Add your name and date of birth to unlock power banks.
+                      Add your name and age to unlock power banks.
                     </Text>
                   </Pressable>
                 ) : null}

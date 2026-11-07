@@ -2,6 +2,7 @@ import '../global.css';
 
 // Must load so TaskManager.defineTask runs in global scope.
 import '@/features/alerts/backgroundLowBatteryTask';
+import '@/features/rentals/returnAlerts';
 
 import { useEffect } from 'react';
 import { View } from 'react-native';
@@ -14,6 +15,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { EmptyState } from '@/components/ui';
 import { useAnalyticsLifecycle } from '@/features/analytics/useAnalyticsLifecycle';
 import { BillingProvider } from '@/features/billing/stripe';
+import { useUpdateChecks } from '@/features/updates/useUpdateChecks';
 import { tracker } from '@/lib/analytics';
 import { useAuthStore } from '@/store/authStore';
 import { useLocationStore } from '@/store/locationStore';
@@ -53,6 +55,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 
 export default function RootLayout() {
   useAnalyticsLifecycle();
+  useUpdateChecks();
   const hydrateAuth = useAuthStore((s) => s.hydrate);
   const hydrateLocation = useLocationStore((s) => s.hydrate);
   const hydrateAccountPrompt = useAccountPromptStore((s) => s.hydrate);

@@ -1,6 +1,8 @@
 import type { ReactElement } from 'react';
 import { useCallback } from 'react';
 import {
+  AddressCollectionMode,
+  LinkDisplay,
   PaymentSheetError,
   PlatformPay,
   StripeProvider,
@@ -55,6 +57,12 @@ const APPEARANCE: SetupParams['appearance'] = {
   },
 };
 
+/** Apple Pay (or Google Pay) and the card's number, expiry and CVC: no Link, country or ZIP. The API sells card only. */
+const FIELDS: Pick<SetupParams, 'billingDetailsCollectionConfiguration' | 'link'> = {
+  billingDetailsCollectionConfiguration: { address: AddressCollectionMode.NEVER },
+  link: { display: LinkDisplay.NEVER },
+};
+
 type Sheet = Pick<ReturnType<typeof useStripe>, 'initPaymentSheet' | 'presentPaymentSheet'>;
 
 async function presentSheet(
@@ -97,7 +105,7 @@ export function useMembershipCheckout() {
       if (!intent) return { result: 'failed', errorCode: 'no_client_secret' };
 
       const amount = (plan.amountCents / 100).toFixed(2);
-      const label = `CUUB ${plan.name}`;
+      const label = plan.name;
       const every = applePayInterval(plan.interval);
       const price = formatMoney(plan.amountCents, plan.currency);
       const params: SetupParams = {
@@ -107,19 +115,20 @@ export function useMembershipCheckout() {
         customerEphemeralKeySecret: setup.ephemeralKeySecret,
         returnURL: 'cuub://stripe-redirect',
         style: 'alwaysDark',
-        primaryButtonLabel: `Start membership · ${price}/${plan.interval}`,
+        primaryButtonLabel: `Get Pass · ${price}/${plan.interval}`,
         defaultBillingDetails: {
           name: person.name ?? undefined,
           phone: person.phone ?? undefined,
         },
         appearance: APPEARANCE,
+        ...FIELDS,
         // Apple requires the recurring amount in both the cart and the request.
         applePay: {
           merchantCountryCode: 'US',
           cartItems: [{ paymentType: 'Recurring', intervalUnit: every.unit, intervalCount: every.count, label, amount }],
           request: {
             type: PlatformPay.PaymentRequestType.Recurring,
-            description: `${plan.name} membership`,
+            description: plan.name,
             managementUrl: getMembershipManageUrl(),
             billing: {
               paymentType: PlatformPay.PaymentType.Recurring,
@@ -171,6 +180,7 @@ export function useLostPowerBankCheckout() {
             phone: person.phone ?? undefined,
           },
           appearance: APPEARANCE,
+          ...FIELDS,
           applePay: {
             merchantCountryCode: 'US',
             cartItems: [{ paymentType: PlatformPay.PaymentType.Immediate, label, amount }],

@@ -64,7 +64,7 @@ function trackResponse(response: Notifications.NotificationResponse | null): voi
 /**
  * Starts the tracker and auto-captures what every screen would otherwise have
  * to: lifecycle, screens, deep links, pushes, crashes, and where the phone is
- * when a new session starts. Mounted once in the root layout.
+ * each time the app is opened. Mounted once in the root layout.
  */
 export function useAnalyticsLifecycle(): void {
   const pathname = usePathname();
@@ -73,23 +73,29 @@ export function useAnalyticsLifecycle(): void {
     watchGlobalErrors();
     watchNetwork();
     watchBattery();
+    // A launch straight into the background (a push or location wake) is not an open until the app is shown.
+    let away = AppState.currentState === 'background';
     void refreshBattery()
       .then(() => tracker.start())
-      .then(({ newSession }) => {
-        if (newSession) void recordLocationFix('open');
+      .then(() => {
+        if (!away) void recordLocationFix('open');
         return linkInstallReferrer();
       });
 
     const appState = AppState.addEventListener('change', (state) => {
       if (state === 'background') {
+        away = true;
         tracker.background();
         return;
       }
       if (state !== 'active') return;
+      // Only a return from `background` is an open: `inactive` (system sheets, Face ID) never left the app.
+      const reopened = away;
+      away = false;
       void refreshBattery()
         .then(() => (AppState.currentState === 'active' ? tracker.foreground() : null))
         .then((result) => {
-          if (result?.newSession) void recordLocationFix('open');
+          if (result && reopened) void recordLocationFix('open');
         });
     });
 

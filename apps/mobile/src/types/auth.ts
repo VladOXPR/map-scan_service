@@ -2,11 +2,10 @@ export type AppUser = {
   userId: string;
   phone: string;
   notifsEnabled: boolean;
-  firstName: string | null;
-  lastName: string | null;
-  /** YYYY-MM-DD. */
-  dateOfBirth: string | null;
-  /** Name and date of birth are on file and passed the server's age check; required to unlock. */
+  /** The whole name in one field. */
+  name: string | null;
+  age: number | null;
+  /** Name and age are on file and passed the server's age check; required to unlock. */
   profileComplete: boolean;
 };
 
