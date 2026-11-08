@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/authStore';
 import { billingKey } from '@/features/billing/hooks';
 import { useLostPowerBankCheckout } from '@/features/billing/stripe';
 import { recordLocationFix } from '@/features/location/fix';
+import { feedbackDueKey } from './useRentalFeedback';
 import {
   checkoutBuyout,
   fetchActiveRental,
@@ -90,6 +91,7 @@ export function useActiveRental() {
         // The card already disappeared; the server has the return either way.
       }
       void queryClient.invalidateQueries({ queryKey: billingKey(session.user.userId) });
+      void queryClient.invalidateQueries({ queryKey: feedbackDueKey(session.user.userId) });
     })();
   }, [current, queryClient, session]);
 

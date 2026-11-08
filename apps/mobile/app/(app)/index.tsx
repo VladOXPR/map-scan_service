@@ -9,6 +9,7 @@ import { AccountModal } from '@/components/overlays/AccountModal';
 import { CreateAccountSheet } from '@/components/overlays/CreateAccountSheet';
 import { LocationPermissionSheet } from '@/components/overlays/LocationPermissionSheet';
 import { MapTopBlur } from '@/components/overlays/MapTopBlur';
+import { RentalFeedbackSheet } from '@/components/overlays/RentalFeedbackSheet';
 import { ReturnAlertsSheet } from '@/components/overlays/ReturnAlertsSheet';
 import { WelcomeOverlay } from '@/components/overlays/WelcomeOverlay';
 import {
@@ -23,6 +24,7 @@ import {
 import { ChargingGlow } from '@/components/overlays/ChargingGlow';
 import { useActiveRental } from '@/features/rentals/hooks';
 import { usePhoneBattery } from '@/features/rentals/usePhoneBattery';
+import { useRentalFeedback } from '@/features/rentals/useRentalFeedback';
 import { useReturnAlerts } from '@/features/rentals/useReturnAlerts';
 import { EmptyState, LoadingState, Text } from '@/components/ui';
 import {
@@ -88,6 +90,7 @@ export default function HomeScreen() {
   const returnAlerts = useReturnAlerts(activeRental, Boolean(session), requestPermission);
   const [returnAlertsBusy, setReturnAlertsBusy] = useState(false);
   const powerBankOut = Boolean(session) && activeRental?.status === 'ACTIVE';
+  const feedback = useRentalFeedback();
   const phoneBattery = usePhoneBattery(Boolean(session && activeRental));
 
   const selectedStation = useMapStore((s) => s.selectedStation);
@@ -584,6 +587,22 @@ export default function HomeScreen() {
         onNotNow={() => {
           void returnAlerts.turnOff();
         }}
+      />
+
+      <RentalFeedbackSheet
+        rental={feedback.rental}
+        visible={
+          Boolean(feedback.rental) &&
+          !activeRental &&
+          focused &&
+          !sheetOpen &&
+          !welcomeVisible &&
+          !locationSheetOpen &&
+          !accountPromptOpen &&
+          !accountOpen
+        }
+        onSubmit={feedback.submit}
+        onClose={feedback.close}
       />
 
       <CreateAccountSheet
