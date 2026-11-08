@@ -44,7 +44,7 @@ export type SubscriptionSetup = {
 
 /** `refresh` re-reads Stripe first; used right after PaymentSheet so the app does not wait on webhooks. */
 export async function fetchBilling(token: string, refresh = false): Promise<Billing> {
-  const { data } = await apiGet<Billing>(`/app/billing${refresh ? '?refresh=1' : ''}`, { token });
+  const { data } = await apiGet<Billing>(`/app/billing${refresh ? '?refresh=true' : ''}`, { token });
   return data;
 }
 

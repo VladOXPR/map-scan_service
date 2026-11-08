@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -14,6 +14,7 @@ import { unlockGate } from '@/features/auth/gate';
 import { membershipPath, stationPath, type PaywallTrigger } from '@/features/auth/routes';
 import { formatMoney, type Billing } from '@/features/billing/api';
 import { useBilling, useManageMembership, useSubscribe } from '@/features/billing/hooks';
+import { PassActivated } from '@/features/billing/PassActivated';
 import { paymentsSupported } from '@/features/billing/stripe';
 import { tracker } from '@/lib/analytics';
 import { useAuthStore } from '@/store/authStore';
@@ -67,7 +68,7 @@ export default function MembershipScreen() {
   const stationCode = typeof params.station === 'string' ? params.station : undefined;
   const session = useAuthStore((s) => s.session);
   const billing = useBilling();
-  const { state, subscribe, reset } = useSubscribe();
+  const { state, subscribe, checkAgain: recheck, reset } = useSubscribe();
   const manage = useManageMembership();
   const viewed = useRef(false);
 
@@ -89,15 +90,21 @@ export default function MembershipScreen() {
     else router.replace(fallback as Href);
   }, [fallback, router]);
 
-  // A new member goes straight to scanning; one who came from a station goes back to unlock it there.
-  useEffect(() => {
-    if (state.phase !== 'active') return;
-    const timer = setTimeout(() => {
-      if (stationCode) close();
-      else router.replace({ pathname: '/scan', params: { entry: 'membership' } });
-    }, 900);
-    return () => clearTimeout(timer);
-  }, [close, router, state.phase, stationCode]);
+  // A new member goes on to scan; one who came from a station goes back to unlock it there.
+  const startUnlocking = useCallback(() => {
+    if (stationCode) close();
+    else router.replace({ pathname: '/scan', params: { entry: 'membership' } });
+  }, [close, router, stationCode]);
+
+  const [checking, setChecking] = useState(false);
+  const checkAgain = useCallback(async () => {
+    setChecking(true);
+    try {
+      await recheck();
+    } finally {
+      setChecking(false);
+    }
+  }, [recheck]);
 
   if (gate.step !== 'ready' || billing.isPending) return <LoadingState />;
 
@@ -115,6 +122,61 @@ export default function MembershipScreen() {
   const data: Billing = billing.data;
   const { membership, plan } = data;
   const busy = state.phase === 'preparing' || state.phase === 'paying' || state.phase === 'activating';
+  const celebrate = membership.active && (state.phase === 'active' || state.phase === 'pending');
+  const pending = state.phase === 'pending' && !membership.active;
+
+  if (celebrate) {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, spacing[5]) }]}
+        >
+          <PassActivated
+            membership={membership}
+            primaryLabel={stationCode ? 'Unlock at this station' : 'Unlock a power bank'}
+            onPrimary={startUnlocking}
+            onDone={close}
+          />
+        </ScrollView>
+      </View>
+    );
+  }
+
+  if (pending) {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          onPress={close}
+          style={[styles.closeButton, { top: insets.top + spacing[2] }]}
+          hitSlop={8}
+        >
+          <Text style={styles.closeIcon}>×</Text>
+        </Pressable>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, spacing[5]) }]}
+          refreshControl={
+            <RefreshControl tintColor={colors.muted} refreshing={checking} onRefresh={() => void checkAgain()} />
+          }
+        >
+          <MembershipChip label="Pass" />
+          <View style={{ gap: spacing[3] }}>
+            <Text style={styles.headline}>Payment received</Text>
+            <Text muted>
+              We're confirming your Pass with Stripe. This usually takes a few seconds, and it will show here the moment
+              it's active. You won't be charged again.
+            </Text>
+          </View>
+          <View style={styles.pendingRow}>
+            <ActivityIndicator color={colors.muted} />
+            <Text muted>Activating your Pass…</Text>
+          </View>
+          <GradientButton label="Check again" loading={checking} onPress={() => void checkAgain()} />
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -174,11 +236,6 @@ export default function MembershipScreen() {
 
         {membership.active ? (
           <View style={{ gap: spacing[3] }}>
-            {state.phase === 'active' ? (
-              <Text variant="subtitle" color={colors.success}>
-                Pass active
-              </Text>
-            ) : null}
             <GradientButton label={stationCode ? 'Back to station' : 'Done'} onPress={close} />
             <Button
               label="Manage Pass"
@@ -207,7 +264,7 @@ export default function MembershipScreen() {
             )}
             {state.phase === 'activating' ? (
               <Text variant="caption" muted center>
-                Activating your Pass…
+                Payment received. Activating your Pass…
               </Text>
             ) : null}
             <Text variant="caption" muted>
@@ -286,6 +343,11 @@ const styles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 20,
     fontWeight: '800',
+  },
+  pendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
   },
   stepConnector: {
     flex: 1,
