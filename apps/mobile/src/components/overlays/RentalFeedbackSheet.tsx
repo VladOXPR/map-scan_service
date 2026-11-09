@@ -25,6 +25,8 @@ import {
 import { colors, radius, spacing } from '@/theme';
 
 const STARS = [1, 2, 3, 4, 5] as const;
+const STAR_ON = '#FFD60A';
+const STAR_OFF = '#3A3A3C';
 const THANKS_MS = 1_400;
 
 type RentalFeedbackSheetProps = {
@@ -66,7 +68,11 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
       onPress={onPress}
       style={[styles.chip, selected && styles.chipSelected]}
     >
-      <Text variant="caption" color={selected ? colors.white : colors.text} style={styles.chipLabel}>
+      <Text
+        variant="caption"
+        color={selected ? colors.black : colors.text}
+        style={[styles.chipLabel, selected && styles.chipLabelSelected]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -183,7 +189,7 @@ export function RentalFeedbackSheet({ rental, visible, onSubmit, onClose }: Rent
                     hitSlop={6}
                     onPress={() => setRating(star)}
                   >
-                    <Text style={[styles.star, { color: star <= rating ? colors.primary : '#3A3A3C' }]}>★</Text>
+                    <Text style={[styles.star, { color: star <= rating ? STAR_ON : STAR_OFF }]}>★</Text>
                   </Pressable>
                 ))}
               </View>
@@ -242,6 +248,7 @@ export function RentalFeedbackSheet({ rental, visible, onSubmit, onClose }: Rent
 
               <Button
                 label="Submit"
+                variant="neutral"
                 fullWidth
                 disabled={rating === 0}
                 loading={phase === 'sending'}
@@ -325,11 +332,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: '#BBBBBB',
+    borderColor: '#DADADA',
   },
   chipLabel: {
     fontWeight: '600',
+  },
+  chipLabelSelected: {
+    fontWeight: '700',
   },
   comment: {
     minHeight: 84,
