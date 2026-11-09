@@ -8,7 +8,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { QrCodeIcon, Text } from '@/components/ui';
+import { QrTapIcon, Text } from '@/components/ui';
 import { GradientButton } from '@/components/ui/GradientButton';
 import { colors, motion, radius, spacing } from '@/theme';
 
@@ -19,10 +19,10 @@ const locationArrowUnsharedIcon = require('@cuub/assets/map/location-arrow-unsha
 
 const PROFILE_SIZE = 44;
 const SUPPORT_WIDTH = 98;
-/** The QR icon inside the Scan buttons: the cap height of the 17pt label. */
-const SCAN_ICON = 12;
+/** The QR tile inside the Scan to start button. */
+const SCAN_TILE = 32;
 
-/** A square on screen, in window coordinates; the scanner page grows out of the Scan button's QR icon. */
+/** A square on screen, in window coordinates; the scanner page grows out of the Scan button's QR tile. */
 export type TileFrame = { x: number; y: number; size: number };
 
 /** The scanner's `tile` route param: "x,y,size". */
@@ -210,11 +210,11 @@ type ScanButtonProps = {
   onPress: (tile: TileFrame | null) => void;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
-  /** Without the icon the scanner simply fades in. */
+  /** Without the tile the scanner simply fades in. */
   showIcon?: boolean;
 };
 
-/** Blue Scan button; with the QR icon, the scanner page grows out of it. */
+/** Blue Scan button; with the QR tile, the scanner page grows out of it. */
 export function ScanButton({ label, onPress, disabled, style, showIcon = true }: ScanButtonProps) {
   const tileRef = useRef<View>(null);
 
@@ -237,7 +237,7 @@ export function ScanButton({ label, onPress, disabled, style, showIcon = true }:
       icon={
         showIcon ? (
           <View ref={tileRef} collapsable={false}>
-            <QrCodeIcon size={SCAN_ICON} />
+            <QrTapIcon size={SCAN_TILE} />
           </View>
         ) : null
       }
