@@ -11,4 +11,5 @@ export * from './Screen';
 export * from './MembershipChip';
 export * from './BatteryIcon';
 export * from './QrTapIcon';
+export * from './QrCodeIcon';
 export * from './WheelPicker';

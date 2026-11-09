@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, Pressable, StyleSheet, View } from 'react-native';
+import { Dimensions, Image, Pressable, StyleSheet, View } from 'react-native';
 import {
   Camera,
   CircleLayer,
@@ -59,9 +59,41 @@ type StationMapProps = {
   cameraZoom?: number;
   /** Fit camera with user left / station right (Nearest CUUB). */
   cameraFit?: CameraFitRequest | null;
-  /** Walking route from the user drawn while no station is open (the nearest one). */
+  /** Walking route from the user, with the walking time above the station: the open one, else the nearest. */
   routeTo?: Coordinates | null;
 };
+
+/** Brisk-but-easy walking pace and street detour for the straight-line fallback. */
+const WALK_METERS_PER_SECOND = 1.3;
+const WALK_DETOUR = 1.25;
+/** Lifts the walking pill clear of the (selected, 1.2x) station pin it sits above. */
+const WALK_PILL_LIFT = 36;
+const walkIcon = require('@cuub/assets/map/walk.png');
+
+function walkingMinutes(route: GeoJSON.Feature<GeoJSON.LineString>, from: Coordinates, to: Coordinates): number {
+  const seconds =
+    typeof route.properties?.durationSeconds === 'number'
+      ? route.properties.durationSeconds
+      : (distanceMeters(from, to) * WALK_DETOUR) / WALK_METERS_PER_SECOND;
+  return Math.max(1, Math.round(seconds / 60));
+}
+
+function walkingLabel(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const rest = minutes % 60;
+  return rest ? `${Math.floor(minutes / 60)} h ${rest} min` : `${minutes / 60} h`;
+}
+
+function WalkingPill({ minutes }: { minutes: number }) {
+  return (
+    <View pointerEvents="none" style={styles.walkPillWrap}>
+      <View style={styles.walkPill}>
+        <Text style={styles.walkPillText}>{walkingLabel(minutes)}</Text>
+        <Image source={walkIcon} style={styles.walkPillIcon} />
+      </View>
+    </View>
+  );
+}
 
 const PUCK_FILL = '#1F69E1';
 const PITCH_MAP = { circlePitchAlignment: 'map' as const };
@@ -314,15 +346,13 @@ export function StationMap({
   });
   const insets = useSafeAreaInsets();
   const tokenStatus = getMapboxTokenStatus();
-  const [routeLine, setRouteLine] =
-    useState<GeoJSON.Feature<GeoJSON.LineString> | null>(null);
+  /** Keyed by route so a line (and its walking time) never shows at a station it wasn't fetched for. */
+  const [fetchedRoute, setFetchedRoute] = useState<{
+    key: string;
+    feature: GeoJSON.Feature<GeoJSON.LineString>;
+  } | null>(null);
   const [hitTargetsEnabled, setHitTargetsEnabled] = useState(false);
   const [livePuck, setLivePuck] = useState<[number, number] | null>(null);
-
-  const routeGradient = useMemo(
-    () => (routeLine ? lineStringToGradientSegments(routeLine) : null),
-    [routeLine],
-  );
 
   const geojson = useMemo(
     () => stationsToGeoJSON(stations, selectedStationId ?? null),
@@ -339,12 +369,7 @@ export function StationMap({
     introCenteredRef.current = true;
   }, [selectedStationId]);
 
-  // An opened station gets its own route (or none, for a pin away from the user); otherwise the standing one.
-  const route = cameraFit?.from
-    ? { from: cameraFit.from, to: cameraFit.to }
-    : !selectedStationId && !cameraFit && routeTo && userCoords
-      ? { from: userCoords, to: routeTo }
-      : null;
+  const route = routeTo && userCoords ? { from: userCoords, to: routeTo } : null;
   // Rounded to ~10 m so small location updates don't refetch the same route.
   const routeKey = route
     ? [route.from.latitude, route.from.longitude, route.to.latitude, route.to.longitude]
@@ -356,8 +381,8 @@ export function StationMap({
 
   useEffect(() => {
     const request = routeRef.current;
-    if (!request) {
-      setRouteLine(null);
+    if (!request || !routeKey) {
+      setFetchedRoute(null);
       return;
     }
 
@@ -365,13 +390,20 @@ export function StationMap({
     void (async () => {
       const feature = await fetchWalkingRoute(request.from, request.to);
       if (cancelled) return;
-      setRouteLine(feature);
+      setFetchedRoute({ key: routeKey, feature });
     })();
 
     return () => {
       cancelled = true;
     };
   }, [routeKey]);
+
+  const routeLine = fetchedRoute && fetchedRoute.key === routeKey ? fetchedRoute.feature : null;
+  const routeGradient = useMemo(
+    () => (routeLine ? lineStringToGradientSegments(routeLine) : null),
+    [routeLine],
+  );
+  const walkMinutes = routeLine && route ? walkingMinutes(routeLine, route.from, route.to) : null;
 
   useEffect(() => {
     if (!cameraFit) return;
@@ -833,6 +865,17 @@ export function StationMap({
 
       {/* RN press targets — same touch path as the Nearest button (not Mapbox hit-test). */}
       {stationHitTargets}
+
+      {route && walkMinutes != null ? (
+        <MarkerView
+          coordinate={[route.to.longitude, route.to.latitude]}
+          anchor={{ x: 0.5, y: 1 }}
+          allowOverlap
+          allowOverlapWithPuck
+        >
+          <WalkingPill minutes={walkMinutes} />
+        </MarkerView>
+      ) : null}
     </MapView>
   );
 }
@@ -852,5 +895,35 @@ const styles = StyleSheet.create({
   stationHit: {
     width: 48,
     height: 48,
+  },
+  walkPillWrap: {
+    paddingBottom: WALK_PILL_LIFT,
+  },
+  walkPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#BBBBBB',
+    borderWidth: 1,
+    borderColor: '#DADADA',
+    borderRadius: 999,
+    paddingLeft: 10,
+    paddingRight: 8,
+    paddingVertical: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  walkPillText: {
+    color: '#000000',
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+  walkPillIcon: {
+    width: 16,
+    height: 16,
+    tintColor: '#000000',
   },
 });

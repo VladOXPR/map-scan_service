@@ -7,7 +7,8 @@ import BottomSheet, {
 import { Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GradientButton } from '@/components/ui/GradientButton';
-import { Text } from '@/components/ui';
+import { Button, Text } from '@/components/ui';
+import { ScanButton, type TileFrame } from '@/components/overlays/MapChrome';
 import { formatDistance, distanceMiles } from '@/lib/distance';
 import type { Coordinates, Station } from '@/types/station';
 import { colors, radius, spacing } from '@/theme';
@@ -20,14 +21,15 @@ type StationBottomSheetProps = {
   station: Station | null;
   userCoords: Coordinates | null;
   onClose: () => void;
-  onPrimaryAction: (station: Station) => void;
+  onDirections: (station: Station) => void;
+  onScan: (tile: TileFrame | null) => void;
   onChangeIndex?: (index: number) => void;
   onAnimate?: (fromIndex: number, toIndex: number) => void;
 };
 
 export const StationBottomSheet = forwardRef<BottomSheet, StationBottomSheetProps>(
   function StationBottomSheet(
-    { station, userCoords, onClose, onPrimaryAction, onChangeIndex, onAnimate },
+    { station, userCoords, onClose, onDirections, onScan, onChangeIndex, onAnimate },
     ref,
   ) {
     const insets = useSafeAreaInsets();
@@ -143,11 +145,20 @@ export const StationBottomSheet = forwardRef<BottomSheet, StationBottomSheetProp
                 />
               </View>
 
-              <GradientButton
-                label={isUnavailable ? 'Location Inactive' : 'Get Directions'}
-                disabled={isUnavailable}
-                onPress={() => onPrimaryAction(station)}
-              />
+              {isUnavailable ? (
+                <GradientButton label="Location Inactive" disabled onPress={() => {}} />
+              ) : (
+                <View style={styles.actions}>
+                  <Button
+                    label="Directions"
+                    variant="neutral"
+                    fullWidth={false}
+                    onPress={() => onDirections(station)}
+                    style={styles.directions}
+                  />
+                  <ScanButton label="Scan" onPress={onScan} style={styles.scan} />
+                </View>
+              )}
             </View>
           ) : (
             <View style={styles.empty}>
@@ -290,5 +301,18 @@ const styles = StyleSheet.create({
   },
   empty: {
     paddingVertical: spacing[6],
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing[3],
+  },
+  directions: {
+    flex: 1,
+    // Same outer size and corners as the gradient Scan button (56 + its 2pt border).
+    minHeight: 60,
+    borderRadius: radius.button + 4,
+  },
+  scan: {
+    flex: 1,
   },
 });

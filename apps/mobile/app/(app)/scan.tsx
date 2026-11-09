@@ -31,10 +31,7 @@ import {
 import {
   Button,
   LoadingState,
-  QR_TAP_GLYPH,
-  QR_TAP_GRADIENT,
-  qrTapCorner,
-  qrTapRim,
+  QR_CODE_GLYPH,
   Text,
 } from '@/components/ui';
 import { unlockGate } from '@/features/auth/gate';
@@ -44,7 +41,7 @@ import { useUnlock } from '@/features/rentals/hooks';
 import { tracker } from '@/lib/analytics';
 import { getLinkHosts } from '@/lib/config';
 import { useAuthStore } from '@/store/authStore';
-import { colors, motion, radius, spacing } from '@/theme';
+import { colors, gradients, motion, radius, spacing } from '@/theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -294,13 +291,13 @@ const REVEAL_EASING = Easing.bezier(0.4, 0, 0.2, 1);
 const PAGE_CORNER = 44;
 
 /**
- * Opened from the map, the whole scanner page grows out of the QR tile in the
- * Unlock powerbank button: the tile's face fades as it opens onto the camera.
+ * Opened from the map, the whole scanner page grows out of the QR icon in a
+ * Scan button: the button's blue and the icon fade as it opens onto the camera.
  */
 function TileReveal({ tile, children }: { tile: TileFrame; children: ReactNode }) {
   const navigation = useNavigation();
   const { width, height } = useWindowDimensions();
-  const tileCorner = qrTapCorner(tile.size);
+  const tileCorner = tile.size * 0.2;
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -331,7 +328,6 @@ function TileReveal({ tile, children }: { tile: TileFrame; children: ReactNode }
   const faceStyle = useAnimatedStyle(() => ({
     opacity: interpolate(progress.value, [0, 0.6], [1, 0], Extrapolation.CLAMP),
   }));
-  const rimStyle = useAnimatedStyle(() => ({ borderRadius: corner.value }));
   const glyphStyle = useAnimatedStyle(() => {
     const side = tile.size + (width - tile.size) * progress.value;
     return { width: side, height: side };
@@ -341,15 +337,8 @@ function TileReveal({ tile, children }: { tile: TileFrame; children: ReactNode }
     <Animated.View style={[styles.reveal, maskStyle]}>
       <Animated.View style={[styles.revealPage, { width, height }, pageStyle]}>{children}</Animated.View>
       <Animated.View pointerEvents="none" style={[styles.revealFace, faceStyle]}>
-        <LinearGradient colors={QR_TAP_GRADIENT} style={StyleSheet.absoluteFill} />
-        <Animated.View
-          style={[
-            StyleSheet.absoluteFill,
-            { borderWidth: qrTapRim(tile.size), borderColor: colors.white },
-            rimStyle,
-          ]}
-        />
-        <Animated.Image source={QR_TAP_GLYPH} style={glyphStyle} />
+        <LinearGradient colors={gradients.cta} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+        <Animated.Image source={QR_CODE_GLYPH} style={glyphStyle} />
       </Animated.View>
     </Animated.View>
   );

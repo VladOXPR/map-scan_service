@@ -48,6 +48,9 @@ import { distanceMiles, formatDistance } from '@/lib/distance';
 import type { Coordinates, Station } from '@/types/station';
 import { colors, spacing } from '@/theme';
 
+/** Farther than this (about 40 minutes on foot), an open station gets no walking route or time. */
+const WALK_ROUTE_MAX_MILES = 2;
+
 export default function HomeScreen() {
   const router = useRouter();
   const sheetRef = useRef<BottomSheet>(null);
@@ -215,9 +218,17 @@ export default function HomeScreen() {
 
   /** A return slot while a power bank is out, otherwise a charger: the standing route and the Return button lead here. */
   const barStation = powerBankOut ? nearestReturn : nearestStation;
+  /** An open station within walking distance gets the route; with none open, the standing one. */
+  const routeStation = selectedStation
+    ? coords &&
+      !selectedStation.locationInactive &&
+      distanceMiles(coords, selectedStation) <= WALK_ROUTE_MAX_MILES
+      ? selectedStation
+      : null
+    : barStation;
   const routeTo = useMemo<Coordinates | null>(
-    () => (barStation ? { latitude: barStation.latitude, longitude: barStation.longitude } : null),
-    [barStation],
+    () => (routeStation ? { latitude: routeStation.latitude, longitude: routeStation.longitude } : null),
+    [routeStation],
   );
 
   /**
@@ -252,8 +263,8 @@ export default function HomeScreen() {
 
       cameraFitToken.current += 1;
 
-      // Same framing as the Nearest location button.
-      if (nearestStation && station.id === nearestStation.id) {
+      // Same framing as the Nearest location button for any station in walking range, so its route shows.
+      if (coords && distanceMiles(coords, station) <= WALK_ROUTE_MAX_MILES) {
         setCameraFit({
           token: cameraFitToken.current,
           from: coords,
@@ -276,7 +287,7 @@ export default function HomeScreen() {
         preserveZoom: true,
       });
     },
-    [coords, nearestStation, selectStation],
+    [coords, selectStation],
   );
 
   const onDeselect = useCallback(() => {
@@ -343,7 +354,7 @@ export default function HomeScreen() {
     });
   };
 
-  const onUnlockPress = (tile: TileFrame | null) => {
+  const onScanPress = (tile: TileFrame | null) => {
     router.push({
       pathname: '/scan',
       params: { entry: 'map', ...(tile ? { tile: tileParam(tile) } : {}) },
@@ -462,7 +473,7 @@ export default function HomeScreen() {
     }
   };
 
-  const onPrimaryAction = (station: Station) => {
+  const onDirections = (station: Station) => {
     const url = `https://maps.apple.com/?daddr=${station.latitude},${station.longitude}`;
     const where = { locationId: station.locationId };
     tracker.track('directions_tapped', {}, where);
@@ -551,7 +562,7 @@ export default function HomeScreen() {
           {powerBankOut ? (
             <FindChargerBar onPress={onFindNearest} label="Return" distanceLabel={nearestDistanceLabel} />
           ) : (
-            <UnlockBar onPress={onUnlockPress} />
+            <UnlockBar onPress={onScanPress} />
           )}
         </>
       ) : null}
@@ -651,7 +662,8 @@ export default function HomeScreen() {
         onClose={clearSelection}
         onChangeIndex={onSheetChange}
         onAnimate={onSheetAnimate}
-        onPrimaryAction={onPrimaryAction}
+        onDirections={onDirections}
+        onScan={onScanPress}
       />
 
       <ChargingGlow visible={powerBankOut && phoneBattery.pluggedIn} />

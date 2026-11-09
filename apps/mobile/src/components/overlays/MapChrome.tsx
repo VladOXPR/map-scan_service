@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -8,7 +8,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { QrTapIcon, Text } from '@/components/ui';
+import { QrCodeIcon, Text } from '@/components/ui';
 import { GradientButton } from '@/components/ui/GradientButton';
 import { colors, motion, radius, spacing } from '@/theme';
 
@@ -19,10 +19,10 @@ const locationArrowUnsharedIcon = require('@cuub/assets/map/location-arrow-unsha
 
 const PROFILE_SIZE = 44;
 const SUPPORT_WIDTH = 98;
-/** The QR tile inside the Unlock powerbank button. */
-const UNLOCK_TILE = 32;
+/** The QR icon inside the Scan buttons. */
+const SCAN_ICON = 22;
 
-/** A square on screen, in window coordinates; the scanner page grows out of the unlock button's QR tile. */
+/** A square on screen, in window coordinates; the scanner page grows out of the Scan button's QR icon. */
 export type TileFrame = { x: number; y: number; size: number };
 
 /** The scanner's `tile` route param: "x,y,size". */
@@ -205,9 +205,15 @@ export function FindChargerBar({ onPress, label = 'Nearest location', distanceLa
   );
 }
 
-/** Bottom bar: scan a station to unlock, opening the scanner out of the button's QR tile. */
-export function UnlockBar({ onPress }: { onPress: (tile: TileFrame | null) => void }) {
-  const insets = useSafeAreaInsets();
+type ScanButtonProps = {
+  label: string;
+  onPress: (tile: TileFrame | null) => void;
+  disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
+};
+
+/** Blue button with the QR icon; the scanner page grows out of the icon. */
+export function ScanButton({ label, onPress, disabled, style }: ScanButtonProps) {
   const tileRef = useRef<View>(null);
 
   const press = () => {
@@ -220,16 +226,26 @@ export function UnlockBar({ onPress }: { onPress: (tile: TileFrame | null) => vo
   };
 
   return (
+    <GradientButton
+      label={label}
+      onPress={press}
+      disabled={disabled}
+      style={style}
+      icon={
+        <View ref={tileRef} collapsable={false}>
+          <QrCodeIcon size={SCAN_ICON} />
+        </View>
+      }
+    />
+  );
+}
+
+/** Bottom bar: scan a station to start a rental. */
+export function UnlockBar({ onPress }: { onPress: (tile: TileFrame | null) => void }) {
+  const insets = useSafeAreaInsets();
+  return (
     <View style={[styles.findBar, { paddingBottom: Math.max(insets.bottom, spacing[4]) }]}>
-      <GradientButton
-        label="Unlock powerbank"
-        onPress={press}
-        icon={
-          <View ref={tileRef} collapsable={false}>
-            <QrTapIcon size={UNLOCK_TILE} />
-          </View>
-        }
-      />
+      <ScanButton label="Scan to start" onPress={onPress} />
     </View>
   );
 }
