@@ -1,4 +1,5 @@
 import type { Coords, Station } from "../types";
+import { formatOpensLabel, isOpenAt, nextOpening, type WeeklyHours } from "../hours";
 
 type LivePayload = {
   online?: boolean | null;
@@ -18,6 +19,10 @@ export type MapLocationRow = {
   longitude?: string | number;
   has_station?: boolean;
   hasStation?: boolean;
+  /** Venue opening hours; null or a missing day = unknown. */
+  hours?: WeeklyHours | null;
+  /** IANA timezone of `hours`. */
+  timezone?: string | null;
   /** Present on /map/live only; null = unknown availability. */
   live?: LivePayload;
 };
@@ -114,6 +119,8 @@ export function mapMapLocation(row: MapLocationRow): Station | null {
     openSlots: open,
     slotCapacity,
     online,
+    openingHours: row.hours ?? null,
+    ...(row.timezone ? { timezone: row.timezone } : {}),
     hasStation,
     hasLiveData,
     status: hasLiveData ? (online ? "open" : "closed") : "open",
@@ -227,9 +234,21 @@ export function stationCoords(station: Station): Coords | null {
   return { latitude, longitude };
 }
 
-/** Offline cabinet or seasonally inactive venue. */
-export function isStationUnavailable(station: Station): boolean {
-  return station.online === false || station.locationInactive === true;
+/** The venue's hours say it is closed at `now`; unknown hours are never closed. */
+export function isStationClosedNow(station: Station, now: Date): boolean {
+  return isOpenAt(station.openingHours, station.timezone, now) === false;
+}
+
+/**
+ * Offline cabinet or seasonally inactive venue. With `now`, also a venue that
+ * is closed at that time; without it, opening hours are ignored.
+ */
+export function isStationUnavailable(station: Station, now?: Date): boolean {
+  return (
+    station.online === false ||
+    station.locationInactive === true ||
+    (now != null && isStationClosedNow(station, now))
+  );
 }
 
 export interface StationDetails {
@@ -240,9 +259,14 @@ export interface StationDetails {
   powerbanks: number;
   slotsToReturn: number;
   unavailable: boolean;
+  /** Venue is closed at `now` per its hours (false when `now` was not passed). */
+  closedNow: boolean;
+  /** "Opens 4:00 PM" while closed now and the next opening is known. */
+  opensLabel: string | null;
 }
 
-export function getStationDetails(station: Station): StationDetails {
+export function getStationDetails(station: Station, now?: Date): StationDetails {
+  const closedNow = now != null && isStationClosedNow(station, now);
   const hasLive = station.hasLiveData === true && station.locationInactive !== true;
   const powerbanks = hasLive ? Math.max(0, Math.round(station.batteriesAvailable)) : 0;
   const open = hasLive ? station.openSlots : undefined;
@@ -256,6 +280,10 @@ export function getStationDetails(station: Station): StationDetails {
     slotCount,
     powerbanks,
     slotsToReturn: open ?? Math.max(0, slotCount - powerbanks),
-    unavailable: isStationUnavailable(station),
+    unavailable: isStationUnavailable(station, now),
+    closedNow,
+    opensLabel: closedNow
+      ? formatOpensLabel(nextOpening(station.openingHours, station.timezone, now))
+      : null,
   };
 }

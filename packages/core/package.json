@@ -10,6 +10,7 @@
     "./geo": "./src/geo/index.ts",
     "./map": "./src/map/index.ts",
     "./stations": "./src/stations/index.ts",
+    "./hours": "./src/hours/index.ts",
     "./nearest": "./src/nearest/index.ts",
     "./api": "./src/api/index.ts",
     "./directions": "./src/directions/index.ts",

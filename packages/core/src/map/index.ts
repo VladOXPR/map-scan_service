@@ -1,4 +1,5 @@
 import type { Coords, Station } from "../types";
+import { isStationUnavailable } from "../stations";
 
 /** Map look shared by the app (@rnmapbox/maps) and the website (mapbox-gl). */
 export const MAP_STYLE_URL = "mapbox://styles/mapbox/dark-v11";
@@ -24,7 +25,7 @@ export interface StationFeatureProperties {
   /** -1 when unknown. Never null — iOS ShapeSource rejects null property values. */
   open_slots: number;
   selected: 0 | 1;
-  /** Offline and/or inactive venue — pin renders at 50% opacity. */
+  /** Offline, inactive or (when `now` is given) closed venue — pin renders at 50% opacity. */
   dimmed: 0 | 1;
 }
 
@@ -46,14 +47,19 @@ export function stationIconIndex(station: Station): number {
   return Math.max(0, Math.min(6, Math.round(station.batteriesAvailable)));
 }
 
-export function isStationDimmed(station: Station): boolean {
-  return station.online === false || station.locationInactive === true;
+/** Same rule as isStationUnavailable: hours only count when `now` is passed. */
+export function isStationDimmed(station: Station, now?: Date): boolean {
+  return isStationUnavailable(station, now);
 }
 
-/** Stations → GeoJSON for Mapbox clustering and the Icon0–6 symbol layer. */
+/**
+ * Stations → GeoJSON for Mapbox clustering and the Icon0–6 symbol layer.
+ * Pass `now` to also dim venues that are closed at that time.
+ */
 export function stationsToGeoJSON(
   stations: Station[],
-  selectedId: string | null = null
+  selectedId: string | null = null,
+  now?: Date
 ): StationFeatureCollection {
   const features: StationFeatureCollection["features"] = [];
   for (const station of stations) {
@@ -71,7 +77,7 @@ export function stationsToGeoJSON(
             ? station.openSlots
             : -1,
         selected: station.id === selectedId ? 1 : 0,
-        dimmed: isStationDimmed(station) ? 1 : 0,
+        dimmed: isStationDimmed(station, now) ? 1 : 0,
       },
     });
   }

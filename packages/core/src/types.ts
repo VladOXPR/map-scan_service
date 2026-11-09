@@ -1,3 +1,5 @@
+import type { WeeklyHours } from "./hours";
+
 export interface Coords {
   latitude: number;
   longitude: number;
@@ -26,6 +28,10 @@ export interface Station {
   online?: boolean;
   /** Venue is seasonally inactive (location.status === INACTIVE). */
   locationInactive?: boolean;
+  /** Venue opening hours; null/missing = unknown, never dims the pin. */
+  openingHours?: WeeklyHours | null;
+  /** IANA timezone of openingHours. */
+  timezone?: string;
   hasStation?: boolean;
   /** Live cabinet counts were present on the row. */
   hasLiveData?: boolean;

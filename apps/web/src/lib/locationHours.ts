@@ -1,15 +1,18 @@
+import type { WeeklyHours } from "@cuub/core";
 import hoursFile from "@/data/location-hours.json";
 
-/** [open, close] in 24-hour America/Chicago time; null = closed that day. */
-export type DayWindow = [string, string] | null;
-
-export interface LocationHours {
+/**
+ * One venue in location-hours.json: `[[open, close], ...]` per day in 24-hour
+ * local time, `[]` = closed that day, missing day = unknown. Also the input to
+ * cuub-api `npm run import:location-hours`.
+ */
+export type LocationHours = WeeklyHours & {
   name: string;
-  tue: DayWindow;
-  wed: DayWindow;
+  /** IANA timezone; America/Chicago when missing. */
+  timezone?: string;
   hours_unknown?: boolean;
   note?: string;
-}
+};
 
 export type LocationHoursMap = Record<string, LocationHours>;
 
