@@ -88,8 +88,8 @@ function WalkingPill({ minutes }: { minutes: number }) {
   return (
     <View pointerEvents="none" style={styles.walkPillWrap}>
       <View style={styles.walkPill}>
-        <Text style={styles.walkPillText}>{walkingLabel(minutes)}</Text>
         <Image source={walkIcon} style={styles.walkPillIcon} />
+        <Text style={styles.walkPillText}>{walkingLabel(minutes)}</Text>
       </View>
     </View>
   );
@@ -907,8 +907,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#DADADA',
     borderRadius: 999,
-    paddingLeft: 10,
-    paddingRight: 8,
+    paddingLeft: 8,
+    paddingRight: 10,
     paddingVertical: 4,
     shadowColor: '#000',
     shadowOpacity: 0.35,

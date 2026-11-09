@@ -4,6 +4,7 @@ import {
   StyleSheet,
   View,
   type StyleProp,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,6 +29,7 @@ type GradientButtonProps = {
   loading?: boolean;
   icon?: ReactNode;
   style?: StyleProp<ViewStyle>;
+  labelStyle?: StyleProp<TextStyle>;
 };
 
 export function GradientButton({
@@ -37,6 +39,7 @@ export function GradientButton({
   loading = false,
   icon,
   style,
+  labelStyle,
 }: GradientButtonProps) {
   const scale = useSharedValue(1);
   const inactive = disabled || loading;
@@ -69,7 +72,7 @@ export function GradientButton({
           <ActivityIndicator color={colors.white} />
         ) : (
           <View style={styles.content}>
-            <Text variant="button" color={colors.white}>
+            <Text variant="button" color={colors.white} style={labelStyle}>
               {label}
             </Text>
             {icon}

@@ -19,8 +19,8 @@ const locationArrowUnsharedIcon = require('@cuub/assets/map/location-arrow-unsha
 
 const PROFILE_SIZE = 44;
 const SUPPORT_WIDTH = 98;
-/** The QR icon inside the Scan buttons. */
-const SCAN_ICON = 22;
+/** The QR icon inside the Scan buttons: the cap height of the 17pt label. */
+const SCAN_ICON = 12;
 
 /** A square on screen, in window coordinates; the scanner page grows out of the Scan button's QR icon. */
 export type TileFrame = { x: number; y: number; size: number };
@@ -231,6 +231,7 @@ export function ScanButton({ label, onPress, disabled, style }: ScanButtonProps)
       onPress={press}
       disabled={disabled}
       style={style}
+      labelStyle={styles.scanLabel}
       icon={
         <View ref={tileRef} collapsable={false}>
           <QrCodeIcon size={SCAN_ICON} />
@@ -251,6 +252,9 @@ export function UnlockBar({ onPress }: { onPress: (tile: TileFrame | null) => vo
 }
 
 const styles = StyleSheet.create({
+  scanLabel: {
+    fontWeight: '800',
+  },
   distancePill: {
     flexDirection: 'row',
     alignItems: 'center',

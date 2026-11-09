@@ -155,6 +155,7 @@ export const StationBottomSheet = forwardRef<BottomSheet, StationBottomSheetProp
                     fullWidth={false}
                     onPress={() => onDirections(station)}
                     style={styles.directions}
+                    labelStyle={styles.directionsLabel}
                   />
                   <ScanButton label="Scan" onPress={onScan} style={styles.scan} />
                 </View>
@@ -311,6 +312,9 @@ const styles = StyleSheet.create({
     // Same outer size and corners as the gradient Scan button (56 + its 2pt border).
     minHeight: 60,
     borderRadius: radius.button + 4,
+  },
+  directionsLabel: {
+    fontWeight: '800',
   },
   scan: {
     flex: 1,

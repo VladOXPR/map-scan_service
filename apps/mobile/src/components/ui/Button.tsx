@@ -1,4 +1,11 @@
-import { ActivityIndicator, Pressable, type PressableProps, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  type PressableProps,
+  type StyleProp,
+  type TextStyle,
+  View,
+} from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -16,6 +23,7 @@ export type ButtonProps = Omit<PressableProps, 'children'> & {
   variant?: Variant;
   loading?: boolean;
   fullWidth?: boolean;
+  labelStyle?: StyleProp<TextStyle>;
 };
 
 const variantStyles: Record<
@@ -42,6 +50,7 @@ export function Button({
   variant = 'primary',
   loading = false,
   fullWidth = true,
+  labelStyle,
   disabled,
   onPressIn,
   onPressOut,
@@ -93,7 +102,7 @@ export function Button({
           <Text
             variant="button"
             color={palette.textColor}
-            style={variant === 'neutral' ? { fontWeight: '700' } : undefined}
+            style={[variant === 'neutral' ? { fontWeight: '700' } : undefined, labelStyle]}
           >
             {label}
           </Text>
