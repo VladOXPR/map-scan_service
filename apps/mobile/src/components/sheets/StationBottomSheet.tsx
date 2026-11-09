@@ -149,15 +149,18 @@ export const StationBottomSheet = forwardRef<BottomSheet, StationBottomSheetProp
                 <GradientButton label="Location Inactive" disabled onPress={() => {}} />
               ) : (
                 <View style={styles.actions}>
-                  <Button
-                    label="Directions"
-                    variant="neutral"
-                    fullWidth={false}
-                    onPress={() => onDirections(station)}
-                    style={styles.directions}
-                    labelStyle={styles.directionsLabel}
-                  />
-                  <ScanButton label="Scan" onPress={onScan} style={styles.scan} />
+                  <View style={styles.action}>
+                    <Button
+                      label="Directions"
+                      variant="neutral"
+                      onPress={() => onDirections(station)}
+                      style={styles.directions}
+                      labelStyle={styles.directionsLabel}
+                    />
+                  </View>
+                  <View style={styles.action}>
+                    <ScanButton label="Scan" onPress={onScan} showIcon={false} />
+                  </View>
                 </View>
               )}
             </View>
@@ -307,16 +310,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing[3],
   },
+  /** Equal halves whatever the labels: each button fills its own half. */
+  action: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+  },
   directions: {
-    flex: 1,
     // Same outer size and corners as the gradient Scan button (56 + its 2pt border).
     minHeight: 60,
     borderRadius: radius.button + 4,
   },
   directionsLabel: {
     fontWeight: '800',
-  },
-  scan: {
-    flex: 1,
   },
 });

@@ -210,10 +210,12 @@ type ScanButtonProps = {
   onPress: (tile: TileFrame | null) => void;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
+  /** Without the icon the scanner simply fades in. */
+  showIcon?: boolean;
 };
 
-/** Blue button with the QR icon; the scanner page grows out of the icon. */
-export function ScanButton({ label, onPress, disabled, style }: ScanButtonProps) {
+/** Blue Scan button; with the QR icon, the scanner page grows out of it. */
+export function ScanButton({ label, onPress, disabled, style, showIcon = true }: ScanButtonProps) {
   const tileRef = useRef<View>(null);
 
   const press = () => {
@@ -233,9 +235,11 @@ export function ScanButton({ label, onPress, disabled, style }: ScanButtonProps)
       style={style}
       labelStyle={styles.scanLabel}
       icon={
-        <View ref={tileRef} collapsable={false}>
-          <QrCodeIcon size={SCAN_ICON} />
-        </View>
+        showIcon ? (
+          <View ref={tileRef} collapsable={false}>
+            <QrCodeIcon size={SCAN_ICON} />
+          </View>
+        ) : null
       }
     />
   );
