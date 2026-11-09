@@ -370,7 +370,7 @@ const TITLE_OPACITY = { at: [0, 0.12, 0.8, 0.95], value: [1, 0, 0, 1] };
 const QR_SETTLE = 0.15;
 /** Station.svg without its blue QR panel, which is drawn as a view so it stays sharp at any zoom. */
 const SCAN_STATION = require('@cuub/assets/illustrations/ScanStation.png');
-/** The gray QR glyph of the blue panel's white square (Blue_QR_Panel.svg), framed to the square's outer edge. */
+/** QR.svg in dark gray, framed to the white square's outer edge like the kiosk's own glyph (Blue_QR_Panel.svg). */
 const BLUE_QR_GLYPH = require('@cuub/assets/illustrations/BlueQrGlyph.png');
 /** The white square's stroke as a share of its side, in Blue_QR_Panel.svg. */
 const BLUE_QR_RIM = 2.0776 / 98.687;
