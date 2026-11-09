@@ -370,8 +370,11 @@ const TITLE_OPACITY = { at: [0, 0.12, 0.8, 0.95], value: [1, 0, 0, 1] };
 const QR_SETTLE = 0.15;
 /** Station.svg without its blue QR panel, which is drawn as a view so it stays sharp at any zoom. */
 const SCAN_STATION = require('@cuub/assets/illustrations/ScanStation.png');
-/** The white QR square of the kiosk screen's blue panel (Blue_QR_Panel.svg). */
-const BLUE_QR_SQUARE = require('@cuub/assets/illustrations/BlueQrSquare.png');
+/** The gray QR glyph of the blue panel's white square (Blue_QR_Panel.svg), framed to the square's outer edge. */
+const BLUE_QR_GLYPH = require('@cuub/assets/illustrations/BlueQrGlyph.png');
+/** The white square's stroke as a share of its side, in Blue_QR_Panel.svg. */
+const BLUE_QR_RIM = 2.0776 / 98.687;
+const BLUE_QR_GRADIENT = [colors.white, '#E8E8E8'] as const;
 
 /** Station.svg's artboard, in its own units. */
 const STATION_ART = { width: 282, height: 405 };
@@ -597,7 +600,12 @@ function ScanInstructions({ onDone }: { onDone: () => void }) {
               />
             </View>
           </Animated.View>
-          <Animated.Image source={BLUE_QR_SQUARE} style={[styles.zoomLayer, zoom.qr, qrStyle]} />
+          {/* Same corners as the scanner's square it lands on. */}
+          <Animated.View style={[styles.zoomLayer, styles.qrSquare, zoom.qr, qrStyle]}>
+            <LinearGradient colors={BLUE_QR_GRADIENT} style={StyleSheet.absoluteFill} />
+            <View style={[StyleSheet.absoluteFill, styles.qrSquareRim, { borderWidth: FRAME * BLUE_QR_RIM }]} />
+            <Image source={BLUE_QR_GLYPH} style={{ width: FRAME, height: FRAME }} />
+          </Animated.View>
           <Animated.Text style={[scanPageStyles.headline, styles.instructionsTitle, { top: zoom.titleTop }, titleStyle]}>
             Scan QR code
           </Animated.Text>
@@ -739,6 +747,14 @@ const styles = StyleSheet.create({
   },
   zoomLayer: {
     position: 'absolute',
+  },
+  qrSquare: {
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+  },
+  qrSquareRim: {
+    borderRadius: radius.xl,
+    borderColor: colors.white,
   },
   panel: {
     position: 'absolute',
