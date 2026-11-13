@@ -6,6 +6,7 @@ import {
   type Tracker,
   type TrackerStorage,
 } from "@cuub/core";
+import { isEmbedUrl } from "./requestContext";
 
 const VISITOR_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TWO_YEARS_SECONDS = 60 * 60 * 24 * 365 * 2;
@@ -97,7 +98,10 @@ export function getWebTracker(): Tracker | null {
 }
 
 export function isEmbedMode(): boolean {
-  return typeof window !== "undefined" && new URLSearchParams(window.location.search).get("embed") === "1";
+  return (
+    typeof window !== "undefined" &&
+    isEmbedUrl(window.location.pathname, new URLSearchParams(window.location.search))
+  );
 }
 
 /** Safe anywhere on the client; a no-op on the server and in embed mode. */

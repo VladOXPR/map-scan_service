@@ -38,9 +38,11 @@ import {
   networkPadding,
   sheetPadding,
   zoomForHorizontalSpan,
+  type Padding,
 } from "./camera";
 import { useGeolocation } from "./useGeolocation";
 import { useMinuteClock } from "./useMinuteClock";
+import { walkingLabel, walkingMinutes } from "./walking";
 import { StationSheet } from "./StationSheet";
 import { BottomDock, SupportButton } from "./MapChrome";
 import { LocationSheet } from "./LocationSheet";
@@ -61,7 +63,15 @@ export interface MapViewProps {
   // render the moment React hydrates — no client-side round-trip needed
   // for first paint.
   initialStations?: Station[];
+  /**
+   * Demo mode: the user is pinned here instead of the browser location, and a
+   * walking route to the nearest station stays up whenever no sheet is open.
+   */
+  mockLocation?: Coords | null;
 }
+
+/** Keeps the surrounding network in frame when the nearest station is very close. */
+const PROTOTYPE_MAX_ZOOM = 16.3;
 
 function readSafeAreaTop(): number {
   const probe = document.createElement("div");
@@ -96,12 +106,17 @@ export function MapView({
   stickerId = null,
   embedMode = false,
   initialStations = [],
+  mockLocation = null,
 }: MapViewProps) {
   const full = variant === "full";
+  const prototype = mockLocation != null;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const accessTokenRef = useRef<string | null>(null);
+  const mapboxRef = useRef<MapboxModule | null>(null);
   const [map, setMap] = useState<mapboxgl.Map | null>(null);
+  /** Walking time shown above the route's station (prototype only). */
+  const [walkPill, setWalkPill] = useState<{ to: Coords; minutes: number } | null>(null);
   const [layersReady, setLayersReady] = useState(false);
 
   const [stations, setStations] = useState<Station[]>(initialStations);
@@ -117,7 +132,13 @@ export function MapView({
   const [toast, setToast] = useState<string | null>(null);
   const [supportPhone, setSupportPhone] = useState(DEFAULT_SUPPORT_PHONE);
 
-  const { permission, coords, request } = useGeolocation();
+  const mockLat = mockLocation?.latitude;
+  const mockLng = mockLocation?.longitude;
+  const mock = useMemo<Coords | null>(
+    () => (mockLat != null && mockLng != null ? { latitude: mockLat, longitude: mockLng } : null),
+    [mockLat, mockLng]
+  );
+  const { permission, coords, request } = useGeolocation(mock);
 
   const stationsRef = useRef(stations);
   stationsRef.current = stations;
@@ -150,6 +171,7 @@ export function MapView({
       const mb = (mod.default ?? mod) as MapboxModule;
       mb.accessToken = token;
       accessTokenRef.current = token;
+      mapboxRef.current = mb;
       if (!containerRef.current) return;
       const instance = new mb.Map({
         container: containerRef.current,
@@ -230,33 +252,39 @@ export function MapView({
   const clearRoute = useCallback(() => {
     routeTokenRef.current += 1;
     if (mapRef.current) setRouteLine(mapRef.current, null);
+    setWalkPill(null);
   }, []);
 
-  const showRoute = useCallback(async (from: Coords, to: Coords) => {
-    const token = ++routeTokenRef.current;
-    const feature = await fetchWalkingRoute(from, to, accessTokenRef.current);
-    if (token !== routeTokenRef.current || !mapRef.current) return;
-    setRouteLine(mapRef.current, feature);
-  }, []);
+  const showRoute = useCallback(
+    async (from: Coords, to: Coords) => {
+      const token = ++routeTokenRef.current;
+      const feature = await fetchWalkingRoute(from, to, accessTokenRef.current);
+      if (token !== routeTokenRef.current || !mapRef.current) return;
+      setRouteLine(mapRef.current, feature);
+      if (prototype) setWalkPill({ to, minutes: walkingMinutes(feature, from, to) });
+    },
+    [prototype]
+  );
 
-  /** User on the left, station on the right, both above the sheet. */
+  /** User on the left, station on the right, both above the sheet (or the given padding). */
   const fitUserAndStation = useCallback(
-    (user: Coords, station: Coords) => {
+    (user: Coords, station: Coords, framing?: { padding?: Padding; maxZoom?: number }) => {
       const m = mapRef.current;
       if (!m) return;
-      const padding = sheetPadding(m, topInset());
+      const padding = framing?.padding ?? sheetPadding(m, topInset());
       const width = m.getContainer().clientWidth || window.innerWidth;
       const mid = {
         latitude: (user.latitude + station.latitude) / 2,
         longitude: (user.longitude + station.longitude) / 2,
       };
+      const zoom = zoomForHorizontalSpan(
+        distanceMeters(user, station),
+        mid.latitude,
+        width - padding.left - padding.right
+      );
       m.flyTo({
         center: [mid.longitude, mid.latitude],
-        zoom: zoomForHorizontalSpan(
-          distanceMeters(user, station),
-          mid.latitude,
-          width - padding.left - padding.right
-        ),
+        zoom: Math.min(zoom, framing?.maxZoom ?? zoom),
         bearing: (bearingDegrees(user, station) - 90 + 360) % 360,
         pitch: MAP_TILT,
         padding,
@@ -290,7 +318,7 @@ export function MapView({
       const m = mapRef.current;
       if (!m) return;
       cancelIntro();
-      clearRoute();
+      if (!prototype) clearRoute();
       m.easeTo({
         center: [user.longitude, user.latitude],
         zoom: m.getZoom(),
@@ -301,7 +329,7 @@ export function MapView({
         essential: true,
       });
     },
-    [cancelIntro, clearRoute]
+    [cancelIntro, clearRoute, prototype]
   );
 
   const now = useMinuteClock();
@@ -331,14 +359,14 @@ export function MapView({
             ? coords
             : null;
       if (from) {
-        fitUserAndStation(from, target);
+        fitUserAndStation(from, target, prototype ? { maxZoom: PROTOTYPE_MAX_ZOOM } : undefined);
         void showRoute(from, target);
       } else {
         clearRoute();
         panToStation(target);
       }
     },
-    [cancelIntro, clearRoute, coords, fitUserAndStation, nearestStation, panToStation, showRoute]
+    [cancelIntro, clearRoute, coords, fitUserAndStation, nearestStation, panToStation, prototype, showRoute]
   );
 
   const closeSheet = useCallback(() => {
@@ -425,7 +453,7 @@ export function MapView({
       addStationLayers(map, stationsToGeoJSON(stationsRef.current, null, new Date()), {
         highlightSelected: full,
       });
-      addOverlayLayers(map);
+      addOverlayLayers(map, { bluePuck: prototype });
 
       const onClusterClick = (e: mapboxgl.MapMouseEvent) => {
         const features = map.queryRenderedFeatures(e.point, { layers: ["clusters"] });
@@ -480,7 +508,7 @@ export function MapView({
     return () => {
       removed = true;
     };
-  }, [map, full, cancelIntro]);
+  }, [map, full, prototype, cancelIntro]);
 
   useEffect(() => {
     if (!map || !layersReady) return;
@@ -521,6 +549,17 @@ export function MapView({
       introTimerRef.current = null;
       const user = coordsRef.current;
       if (!user) return;
+      if (prototype) {
+        const nearest = pickNearest(user, stationsRef.current, new Date());
+        const target = nearest && stationCoords(nearest);
+        if (target) {
+          fitUserAndStation(user, target, {
+            padding: networkPadding(map, topInset()),
+            maxZoom: PROTOTYPE_MAX_ZOOM,
+          });
+        }
+        return;
+      }
       const nearby = stationsRef.current
         .map(stationCoords)
         .filter(
@@ -536,7 +575,35 @@ export function MapView({
         essential: true,
       });
     }, 1000);
-  }, [map, layersReady, coords, stations, topInset]);
+  }, [map, layersReady, coords, stations, topInset, prototype, fitUserAndStation]);
+
+  useEffect(() => {
+    if (!prototype || !layersReady || sheetOpen || !coords || !nearestStation) return;
+    const target = stationCoords(nearestStation);
+    if (target) void showRoute(coords, target);
+  }, [prototype, layersReady, sheetOpen, coords, nearestStation, showRoute]);
+
+  useEffect(() => {
+    const mb = mapboxRef.current;
+    if (!map || !mb || !walkPill) return;
+    const wrap = document.createElement("div");
+    wrap.className = "cuub-walk-pill-wrap";
+    const pill = document.createElement("div");
+    pill.className = "cuub-walk-pill";
+    const icon = document.createElement("img");
+    icon.src = "/assets/map/walk.png";
+    icon.alt = "";
+    const label = document.createElement("span");
+    label.textContent = walkingLabel(walkPill.minutes);
+    pill.append(icon, label);
+    wrap.append(pill);
+    const marker = new mb.Marker({ element: wrap, anchor: "bottom" })
+      .setLngLat([walkPill.to.longitude, walkPill.to.latitude])
+      .addTo(map);
+    return () => {
+      marker.remove();
+    };
+  }, [map, walkPill]);
 
   // postMessage bridge for iframe parents (Framer embeds).
   const bridgeRef = useRef({ findNearest: () => {}, requestLocation: () => {} });
@@ -590,8 +657,8 @@ export function MapView({
     return c ? formatMiles(distanceMiles(coords, c)) : null;
   }, [coords, nearestStation]);
 
-  const showSupport = full && !sheetOpen;
-  const showDock = !embedMode && !sheetOpen;
+  const showSupport = full && !sheetOpen && !prototype;
+  const showDock = !embedMode && !prototype && !sheetOpen;
   const ctrlBottom = sheetOpen
     ? `${sheetHeight}px`
     : showDock
@@ -646,7 +713,7 @@ export function MapView({
         </div>
       )}
 
-      {full && <AppPromptModal disabled={embedMode} stickerId={stickerId} />}
+      {full && <AppPromptModal disabled={embedMode || prototype} stickerId={stickerId} />}
     </div>
   );
 }

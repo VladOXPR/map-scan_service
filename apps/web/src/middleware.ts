@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { WEB_HANDOFF_PARAM } from "@cuub/core";
-import { EMBED_HEADER, PAGE_URL_HEADER } from "@/lib/requestContext";
+import { EMBED_HEADER, PAGE_URL_HEADER, isEmbedUrl } from "@/lib/requestContext";
 
 const VISITOR_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TWO_YEARS_SECONDS = 60 * 60 * 24 * 365 * 2;
@@ -19,7 +19,7 @@ export function middleware(request: NextRequest) {
 
   const headers = new Headers(request.headers);
   headers.set(PAGE_URL_HEADER, `${request.nextUrl.pathname}${request.nextUrl.search}`);
-  if (request.nextUrl.searchParams.get("embed") === "1") headers.set(EMBED_HEADER, "1");
+  if (isEmbedUrl(request.nextUrl.pathname, request.nextUrl.searchParams)) headers.set(EMBED_HEADER, "1");
   else headers.delete(EMBED_HEADER);
 
   if (visitorId) return NextResponse.next({ request: { headers } });
