@@ -142,6 +142,34 @@ button {
   display: block;
 }
 
+/* Walking time above the routed station (map marker); bottom padding clears the selected pin */
+.cuub-walk-pill-wrap {
+  padding-bottom: 36px;
+  pointer-events: none;
+}
+
+.cuub-walk-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px 4px 8px;
+  border: 1px solid #dadada;
+  border-radius: 999px;
+  background-color: #bbbbbb;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  color: #000;
+  font-size: 15px;
+  line-height: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cuub-walk-pill img {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
 /* Bottom sheet (non-modal, draggable) */
 .cuub-sheet {
   position: fixed;

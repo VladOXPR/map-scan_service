@@ -2,8 +2,13 @@ import { WEB_HANDOFF_PARAM } from "@cuub/core";
 
 /** Set by middleware: path + query of the page being rendered. */
 export const PAGE_URL_HEADER = "x-cuub-page-url";
-/** Set by middleware when the page is a Framer embed (`?embed=1`). */
+/** Set by middleware when the page is a Framer embed (see `isEmbedUrl`). */
 export const EMBED_HEADER = "x-cuub-embed";
+
+/** Framer embeds (`?embed=1`) and the website prototype: no app banner, no analytics. */
+export function isEmbedUrl(pathname: string, searchParams: URLSearchParams): boolean {
+  return searchParams.get("embed") === "1" || pathname === "/prototype";
+}
 
 const VISITOR_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
