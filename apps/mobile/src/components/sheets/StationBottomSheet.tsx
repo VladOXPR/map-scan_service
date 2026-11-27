@@ -8,7 +8,7 @@ import { Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GradientButton } from '@/components/ui/GradientButton';
 import { Button, Text } from '@/components/ui';
-import { ScanButton, type TileFrame } from '@/components/overlays/MapChrome';
+import { RentalClockButton, ScanButton, type TileFrame } from '@/components/overlays/MapChrome';
 import { formatDistance, distanceMiles } from '@/lib/distance';
 import type { Coordinates, Station } from '@/types/station';
 import { colors, radius, spacing } from '@/theme';
@@ -23,13 +23,26 @@ type StationBottomSheetProps = {
   onClose: () => void;
   onDirections: (station: Station) => void;
   onScan: (tile: TileFrame | null) => void;
+  /** Set while a power bank is out: the rental time replaces Scan. */
+  rentalStartedAt?: string | null;
+  onRentalPress?: () => void;
   onChangeIndex?: (index: number) => void;
   onAnimate?: (fromIndex: number, toIndex: number) => void;
 };
 
 export const StationBottomSheet = forwardRef<BottomSheet, StationBottomSheetProps>(
   function StationBottomSheet(
-    { station, userCoords, onClose, onDirections, onScan, onChangeIndex, onAnimate },
+    {
+      station,
+      userCoords,
+      onClose,
+      onDirections,
+      onScan,
+      rentalStartedAt,
+      onRentalPress,
+      onChangeIndex,
+      onAnimate,
+    },
     ref,
   ) {
     const insets = useSafeAreaInsets();
@@ -159,7 +172,11 @@ export const StationBottomSheet = forwardRef<BottomSheet, StationBottomSheetProp
                     />
                   </View>
                   <View style={styles.action}>
-                    <ScanButton label="Scan" onPress={onScan} showIcon={false} />
+                    {rentalStartedAt && onRentalPress ? (
+                      <RentalClockButton startedAt={rentalStartedAt} onPress={onRentalPress} />
+                    ) : (
+                      <ScanButton label="Scan" onPress={onScan} />
+                    )}
                   </View>
                 </View>
               )}

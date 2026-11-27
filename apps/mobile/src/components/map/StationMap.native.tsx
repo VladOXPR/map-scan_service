@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Station, Coordinates } from '@/types/station';
 import { configureMapbox, getMapboxTokenStatus } from '@/lib/mapbox';
 import { fetchWalkingRoute } from '@/features/map/fetchWalkingRoute';
+import { walkingLabel, walkingMinutes } from '@/features/map/walking';
 import { lineStringToGradientSegments } from '@/features/map/routeGradient';
 import { map as mapTokens, colors } from '@/theme';
 import { stationsToGeoJSON } from '@cuub/core';
@@ -63,26 +64,9 @@ type StationMapProps = {
   routeTo?: Coordinates | null;
 };
 
-/** Brisk-but-easy walking pace and street detour for the straight-line fallback. */
-const WALK_METERS_PER_SECOND = 1.3;
-const WALK_DETOUR = 1.25;
 /** Lifts the walking pill clear of the (selected, 1.2x) station pin it sits above. */
 const WALK_PILL_LIFT = 36;
 const walkIcon = require('@cuub/assets/map/walk.png');
-
-function walkingMinutes(route: GeoJSON.Feature<GeoJSON.LineString>, from: Coordinates, to: Coordinates): number {
-  const seconds =
-    typeof route.properties?.durationSeconds === 'number'
-      ? route.properties.durationSeconds
-      : (distanceMeters(from, to) * WALK_DETOUR) / WALK_METERS_PER_SECOND;
-  return Math.max(1, Math.round(seconds / 60));
-}
-
-function walkingLabel(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`;
-  const rest = minutes % 60;
-  return rest ? `${Math.floor(minutes / 60)} h ${rest} min` : `${minutes / 60} h`;
-}
 
 function WalkingPill({ minutes }: { minutes: number }) {
   return (

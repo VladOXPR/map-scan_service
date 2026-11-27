@@ -5,6 +5,7 @@ import { syncExpoPushToken } from '@/features/alerts/registerExpoPushToken';
 import { useLowBatteryAlerts } from '@/features/alerts/useLowBatteryAlerts';
 import { usePushNavigation } from '@/features/alerts/usePushNavigation';
 import { useBilling } from '@/features/billing/hooks';
+import { useRentalHistory } from '@/features/rentals/hooks';
 import { parseTileParam } from '@/components/overlays/MapChrome';
 import { useAuthStore } from '@/store/authStore';
 import { LoadingState } from '@/components/ui';
@@ -17,6 +18,8 @@ export default function AppLayout() {
   useLowBatteryAlerts(Boolean(hydrated && session));
   // Keeps the analytics membership context current on every screen.
   useBilling();
+  // Loaded ahead so the scanner knows at once whether to play its instructions.
+  useRentalHistory();
   usePushNavigation();
 
   useEffect(() => {
@@ -50,6 +53,7 @@ export default function AppLayout() {
           animation: parseTileParam((route.params as { tile?: string } | undefined)?.tile) ? 'none' : 'fade',
         })}
       />
+      <Stack.Screen name="history" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen
         name="membership"
         options={{ presentation: 'modal', animation: 'slide_from_bottom' }}

@@ -22,4 +22,4 @@ export type LoginWelcomeFlags = {
 
 export type LoginResult = AuthSession & LoginWelcomeFlags;
 
-export type WelcomeVariant = 'new' | 'back';
+export type WelcomeVariant = 'new';

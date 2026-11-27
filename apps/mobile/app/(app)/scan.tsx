@@ -39,8 +39,9 @@ import {
 } from '@/components/ui';
 import { unlockGate } from '@/features/auth/gate';
 import { stationPath } from '@/features/auth/routes';
+import { useBilling } from '@/features/billing/hooks';
 import { isUnlockBlockReason } from '@/features/rentals/api';
-import { useUnlock } from '@/features/rentals/hooks';
+import { useRentalHistory, useUnlock } from '@/features/rentals/hooks';
 import { tracker } from '@/lib/analytics';
 import { getLinkHosts } from '@/lib/config';
 import { useAuthStore } from '@/store/authStore';
@@ -59,18 +60,34 @@ function isEntry(value: unknown): value is ScanEntry {
   return value === 'map' || value === 'station' || value === 'rental_card' || value === 'membership';
 }
 
+/**
+ * The instructions play for anyone without the Pass, and for a member until
+ * their first power bank comes out. Decided once as the scanner opens, from
+ * what's already loaded; when unsure they play.
+ */
+function useShowInstructions() {
+  const billing = useBilling();
+  const history = useRentalHistory();
+  const member = billing.data?.membership.active ?? false;
+  const unlockedBefore =
+    history.data?.some((rental) => rental.status !== 'PENDING_UNLOCK' && rental.status !== 'UNLOCK_FAILED') ?? false;
+  const [show] = useState(() => !member || !unlockedBefore);
+  return show;
+}
+
 export default function ScanScreen() {
   const params = useLocalSearchParams<{ entry?: string; unlock?: string; tile?: string }>();
   const entry: ScanEntry = isEntry(params.entry) ? params.entry : 'map';
   const unlockNow = normalizeStationCode(typeof params.unlock === 'string' ? params.unlock : null);
   const tile = parseTileParam(params.tile);
-  const [instructed, setInstructed] = useState(false);
+  const showInstructions = useShowInstructions();
+  const [instructed, setInstructed] = useState(!showInstructions);
   const onInstructed = useCallback(() => setInstructed(true), []);
   if (unlockNow) return <Scanner entry={entry} active={false} unlockNow={unlockNow} />;
   const page = (
     <View style={styles.page}>
       <Scanner entry={entry} active={instructed} />
-      <ScanInstructions onDone={onInstructed} />
+      {showInstructions ? <ScanInstructions onDone={onInstructed} /> : null}
     </View>
   );
   return tile ? <TileReveal tile={tile}>{page}</TileReveal> : page;
@@ -94,10 +111,10 @@ function Scanner({ entry, active, unlockNow }: { entry: ScanEntry; active: boole
   const [unlockCode, setUnlockCode] = useState<string | null>(unlockNow ?? null);
   const { state: unlockState, unlock } = useUnlock();
   const cameraRef = useRef<CameraView>(null);
-  const goHome = useCallback(() => router.replace('/(app)'), [router]);
+  const goHome = useCallback(() => router.dismissTo('/(app)'), [router]);
   const close = useCallback(() => {
     if (router.canGoBack()) router.back();
-    else router.replace('/(app)');
+    else router.dismissTo('/(app)');
   }, [router]);
 
   const startedNow = useRef(false);
@@ -361,11 +378,11 @@ const INSTRUCTIONS_ZOOM_MS = 1800;
 const INSTRUCTIONS_HOLD_MS = INSTRUCTIONS_ZOOM_DELAY_MS + INSTRUCTIONS_ZOOM_MS + 250;
 const INSTRUCTIONS_FADE_MS = 400;
 /**
- * The title steps aside while the station grows over it, and comes back in
- * white once the panel's bottom edge has passed below it (around 0.8). Keyed
- * to the zoom, where 1 is the QR square reaching the scanner's square.
+ * The title only appears at the end, in white, once the panel's bottom edge
+ * has passed below it (around 0.8). Keyed to the zoom, where 1 is the QR
+ * square reaching the scanner's square.
  */
-const TITLE_OPACITY = { at: [0, 0.12, 0.8, 0.95], value: [1, 0, 0, 1] };
+const TITLE_OPACITY = { at: [0.8, 0.95], value: [0, 1] };
 /** How far either side of the threshold the QR square eases from following the station to standing still. */
 const QR_SETTLE = 0.15;
 /** Station.svg without its blue QR panel, which is drawn as a view so it stays sharp at any zoom. */
@@ -544,7 +561,7 @@ function ScanInstructions({ onDone }: { onDone: () => void }) {
     const z = zoom ? progress.value * zoom.end : 0;
     return {
       opacity: interpolate(z, TITLE_OPACITY.at, TITLE_OPACITY.value, Extrapolation.CLAMP),
-      color: z < 0.5 ? colors.black : colors.white,
+      color: colors.white,
     };
   }, [zoom]);
   if (gone) return null;

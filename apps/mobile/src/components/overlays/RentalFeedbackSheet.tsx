@@ -11,7 +11,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, Text } from '@/components/ui';
+import { Button, Chip, Text } from '@/components/ui';
 import type { AppRental } from '@/features/rentals/api';
 import {
   FEEDBACK_COMMENT_MAX,
@@ -58,25 +58,6 @@ function whenLabel(rental: AppRental): string {
   const date = new Date(rental.startedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   if (!rental.endedAt) return date;
   return `${date}, ${timeLabel(rental.startedAt)} – ${timeLabel(rental.endedAt)} · ${durationLabel(rental.startedAt, rental.endedAt)}`;
-}
-
-function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={[styles.chip, selected && styles.chipSelected]}
-    >
-      <Text
-        variant="caption"
-        color={selected ? colors.black : colors.text}
-        style={[styles.chipLabel, selected && styles.chipLabelSelected]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
 }
 
 /** Asked once a power bank is back: stars, then why they needed a charge, then what went wrong after a low rating. */
@@ -322,24 +303,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing[2],
-  },
-  chip: {
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  chipSelected: {
-    backgroundColor: '#BBBBBB',
-    borderColor: '#DADADA',
-  },
-  chipLabel: {
-    fontWeight: '600',
-  },
-  chipLabelSelected: {
-    fontWeight: '700',
   },
   comment: {
     minHeight: 84,

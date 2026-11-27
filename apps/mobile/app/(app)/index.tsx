@@ -5,6 +5,7 @@ import { useIsFocused, useRouter, type Href } from 'expo-router';
 import { StationMap } from '@/components/map/StationMap';
 import type { CameraFitRequest } from '@/components/map/StationMap';
 import { StationBottomSheet } from '@/components/sheets/StationBottomSheet';
+import { ReturnBottomSheet, type ReturnOption } from '@/components/sheets/ReturnBottomSheet';
 import { AccountModal } from '@/components/overlays/AccountModal';
 import { CreateAccountSheet } from '@/components/overlays/CreateAccountSheet';
 import { LocationPermissionSheet } from '@/components/overlays/LocationPermissionSheet';
@@ -14,8 +15,8 @@ import { ReturnAlertsSheet } from '@/components/overlays/ReturnAlertsSheet';
 import { WelcomeOverlay } from '@/components/overlays/WelcomeOverlay';
 import {
   EnableLocationButton,
-  FindChargerBar,
   ProfileButton,
+  RentalBar,
   SupportButton,
   tileParam,
   UnlockBar,
@@ -44,7 +45,9 @@ import { useAuthStore } from '@/store/authStore';
 import { useAccountPromptStore } from '@/store/accountPromptStore';
 import { useMapStore } from '@/store/mapStore';
 import { useWelcomeStore } from '@/store/welcomeStore';
-import { distanceMiles, formatDistance } from '@/lib/distance';
+import type { WelcomeVariant } from '@/types/auth';
+import { distanceMiles } from '@/lib/distance';
+import { useWalkingMinutes } from '@/features/map/walking';
 import type { Coordinates, Station } from '@/types/station';
 import { colors, spacing } from '@/theme';
 
@@ -54,6 +57,9 @@ const WALK_ROUTE_MAX_MILES = 2;
 export default function HomeScreen() {
   const router = useRouter();
   const sheetRef = useRef<BottomSheet>(null);
+  const returnSheetRef = useRef<BottomSheet>(null);
+  const [returnSheetIndex, setReturnSheetIndex] = useState(-1);
+  const [returnTargetId, setReturnTargetId] = useState<string | null>(null);
   const didAutoPromptRef = useRef(false);
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
@@ -68,7 +74,7 @@ export default function HomeScreen() {
   const [locationRequesting, setLocationRequesting] = useState(false);
   const [accountPromptOpen, setAccountPromptOpen] = useState(false);
   const [welcomeVisible, setWelcomeVisible] = useState(false);
-  const [welcomeVariant, setWelcomeVariant] = useState<'new' | 'back'>('new');
+  const [welcomeVariant, setWelcomeVariant] = useState<WelcomeVariant>('new');
   /** Pin highlight — cleared as soon as the sheet starts closing. */
   const [pinSelectedId, setPinSelectedId] = useState<string | null>(null);
   const [cameraFit, setCameraFit] = useState<CameraFitRequest | null>(null);
@@ -102,7 +108,7 @@ export default function HomeScreen() {
   const clearSelection = useMapStore((s) => s.clearSelection);
   const setSheetIndex = useMapStore((s) => s.setSheetIndex);
 
-  const sheetOpen = sheetIndex >= 0;
+  const sheetOpen = sheetIndex >= 0 || returnSheetIndex >= 0;
   const mapLoadTrackedRef = useRef(false);
 
   useEffect(() => {
@@ -206,18 +212,35 @@ export default function HomeScreen() {
     )[0];
   }, [coords, stations]);
 
-  const nearestReturn = useMemo(() => {
-    if (!powerBankOut) return null;
+  /** The two closest stations with an open slot, while a power bank is out. */
+  const returnStations = useMemo(() => {
+    if (!powerBankOut) return [];
     const candidates = stations.filter(
       (s) => s.locationInactive !== true && s.online !== false && (s.openSlots ?? 0) > 0,
     );
-    if (!candidates.length) return null;
-    if (!coords) return candidates[0];
-    return [...candidates].sort((a, b) => distanceMiles(coords, a) - distanceMiles(coords, b))[0];
+    if (!coords) return candidates.slice(0, 2);
+    return [...candidates]
+      .sort((a, b) => distanceMiles(coords, a) - distanceMiles(coords, b))
+      .slice(0, 2);
   }, [coords, powerBankOut, stations]);
+  const returnWalkMinutes = useWalkingMinutes(
+    permission === 'granted' ? coords : null,
+    returnStations,
+  );
+  const returnOptions = useMemo<ReturnOption[]>(
+    () =>
+      returnStations.map((station, i) => ({
+        station,
+        miles: coords ? distanceMiles(coords, station) : null,
+        walkMinutes: returnWalkMinutes[i] ?? null,
+      })),
+    [coords, returnStations, returnWalkMinutes],
+  );
+  const returnTarget =
+    returnStations.find((s) => s.id === returnTargetId) ?? returnStations[0] ?? null;
 
-  /** A return slot while a power bank is out, otherwise a charger: the standing route and the Return button lead here. */
-  const barStation = powerBankOut ? nearestReturn : nearestStation;
+  /** A return slot while a power bank is out, otherwise a charger: the standing route leads here. */
+  const barStation = powerBankOut ? returnTarget : nearestStation;
   /** An open station within walking distance gets the route; with none open, the standing one. */
   const routeStation = selectedStation
     ? coords &&
@@ -250,6 +273,7 @@ export default function HomeScreen() {
         { locationId: station.locationId },
       );
       // Sheet first — identical path for map MarkerView + Nearest button.
+      returnSheetRef.current?.close();
       sheetRef.current?.snapToIndex(0);
       selectStation(station);
       setPinSelectedId(station.id);
@@ -296,6 +320,7 @@ export default function HomeScreen() {
     setSheetIndex(-1);
     clearSelection();
     sheetRef.current?.close();
+    returnSheetRef.current?.close();
   }, [clearSelection, setSheetIndex]);
 
   const onSheetAnimate = useCallback(
@@ -322,37 +347,59 @@ export default function HomeScreen() {
     [clearSelection, setSheetIndex],
   );
 
-  const nearestDistanceLabel = useMemo(() => {
-    if (!barStation || !coords) return null;
-    const miles = distanceMiles(coords, {
-      latitude: barStation.latitude,
-      longitude: barStation.longitude,
-    });
-    if (miles < 0.1) return formatDistance(miles);
-    return `${miles.toFixed(1)} mi`;
-  }, [coords, barStation]);
-
-  const onFindNearest = () => {
-    void recordLocationFix('find_nearest');
-    const target = powerBankOut ? 'return' : 'charger';
-    if (!barStation) {
-      tracker.track('find_nearest_blocked', { target, reason: stations.length ? 'none_online' : 'no_stations' });
-      return;
-    }
-    tracker.track('find_nearest_tapped', { target, locationShared: permission === 'granted' });
-    cameraFitToken.current += 1;
-    const to: Coordinates = {
-      latitude: barStation.latitude,
-      longitude: barStation.longitude,
-    };
-    openStation(barStation, {
-      cameraFit: {
+  const fitReturnTarget = useCallback(
+    (station: Station | null) => {
+      if (!station) return;
+      cameraFitToken.current += 1;
+      setCameraTarget(null);
+      setCameraFit({
         token: cameraFitToken.current,
         from: coords,
-        to,
-      },
-    });
+        to: { latitude: station.latitude, longitude: station.longitude },
+      });
+    },
+    [coords],
+  );
+
+  const onOpenReturnSheet = () => {
+    void recordLocationFix('find_nearest');
+    if (returnStations.length) {
+      tracker.track('find_nearest_tapped', { target: 'return', locationShared: permission === 'granted' });
+    } else {
+      tracker.track('find_nearest_blocked', {
+        target: 'return',
+        reason: stations.length ? 'none_online' : 'no_stations',
+      });
+    }
+    const first = returnStations[0] ?? null;
+    setReturnTargetId(first?.id ?? null);
+    returnSheetRef.current?.snapToIndex(0);
+    fitReturnTarget(first);
   };
+
+  const onSelectReturn = (station: Station) => {
+    setReturnTargetId(station.id);
+    fitReturnTarget(station);
+  };
+
+  const onReturnSheetChange = useCallback((index: number) => {
+    setReturnSheetIndex(index);
+    // A pin tap closes this sheet on its way to the station sheet; keep that station's framing.
+    if (index < 0 && !useMapStore.getState().selectedStation) setCameraFit(null);
+  }, []);
+
+  // The sheets mount closed; a selection left in the store by an earlier map would hide the chrome with nothing open.
+  useEffect(() => {
+    useMapStore.getState().clearSelection();
+  }, []);
+
+  const wasOut = useRef(powerBankOut);
+  useEffect(() => {
+    if (!powerBankOut) returnSheetRef.current?.close();
+    // A new rental lands on the map with its rental bar, not on the station it was scanned from.
+    else if (!wasOut.current) onDeselect();
+    wasOut.current = powerBankOut;
+  }, [onDeselect, powerBankOut]);
 
   const onScanPress = (tile: TileFrame | null) => {
     router.push({
@@ -425,6 +472,7 @@ export default function HomeScreen() {
   const onLogout = async () => {
     setAccountOpen(false);
     await signOut();
+    router.replace({ pathname: '/(auth)/phone', params: { entry: 'logout' } });
   };
 
   const onDeleteAccount = async () => {
@@ -559,8 +607,8 @@ export default function HomeScreen() {
           <ProfileButton onPress={onOpenAccount} />
           <SupportButton onPress={onSupport} />
           <EnableLocationButton locationShared={locationShared} onPress={onLocatePress} />
-          {powerBankOut ? (
-            <FindChargerBar onPress={onFindNearest} label="Return" distanceLabel={nearestDistanceLabel} />
+          {powerBankOut && activeRental ? (
+            <RentalBar startedAt={activeRental.startedAt} onPress={onOpenReturnSheet} />
           ) : (
             <UnlockBar onPress={onScanPress} />
           )}
@@ -642,6 +690,10 @@ export default function HomeScreen() {
                   : profileHref({ trigger: 'account', next: membershipPath({ trigger: 'account' }) })) as Href,
               );
             }}
+            onViewHistory={() => {
+              setAccountOpen(false);
+              router.push('/history' as Href);
+            }}
           />
         }
         deleting={deletingAccount}
@@ -664,6 +716,22 @@ export default function HomeScreen() {
         onAnimate={onSheetAnimate}
         onDirections={onDirections}
         onScan={onScanPress}
+        rentalStartedAt={powerBankOut ? activeRental?.startedAt : null}
+        onRentalPress={() => {
+          sheetRef.current?.close();
+          onOpenReturnSheet();
+        }}
+      />
+
+      <ReturnBottomSheet
+        ref={returnSheetRef}
+        rental={activeRental ?? null}
+        options={returnOptions}
+        selectedId={returnTarget?.id ?? null}
+        onSelect={onSelectReturn}
+        onDirections={onDirections}
+        onChangeIndex={onReturnSheetChange}
+        onAnimate={(_from, to) => setReturnSheetIndex(to)}
       />
 
       <ChargingGlow visible={powerBankOut && phoneBattery.pluggedIn} />

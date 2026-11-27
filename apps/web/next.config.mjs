@@ -6,8 +6,9 @@ const nextConfig = {
     return [
       {
         source: "/:path*",
+        // No CSP frame-ancestors (or X-Frame-Options): framing is allowed by default, and
+        // Framer's Embed refuses any page that sends frame-ancestors, even `*`.
         headers: [
-          { key: "Content-Security-Policy", value: "frame-ancestors *" },
           { key: "Permissions-Policy", value: "geolocation=*" },
         ],
       },

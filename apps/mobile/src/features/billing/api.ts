@@ -53,7 +53,34 @@ export async function startSubscription(token: string): Promise<SubscriptionSetu
   return data;
 }
 
-/** Stripe Customer Portal: update the card or cancel. */
+/** Same codes as cuub-api's SUBSCRIPTION_CANCEL_REASONS; the server refuses anything else. */
+export const CANCEL_REASONS = [
+  { value: 'TOO_EXPENSIVE', label: 'Too expensive' },
+  { value: 'NOT_USING', label: "Don't use it enough" },
+  { value: 'NO_STATIONS_NEARBY', label: 'No stations near me' },
+  { value: 'POWER_BANK_ISSUES', label: 'Power bank issues' },
+  { value: 'TEMPORARY', label: 'Only needed it for a while' },
+  { value: 'OTHER', label: 'Other' },
+] as const;
+
+export type CancelReason = (typeof CANCEL_REASONS)[number]['value'];
+export const CANCEL_COMMENT_MAX = 1000;
+
+/** Stops renewal; the Pass keeps working until `currentPeriodEnd`. */
+export async function cancelMembership(
+  token: string,
+  answers: { reasons: CancelReason[]; comment: string | null },
+): Promise<Billing> {
+  const { data } = await apiPost<Billing>('/app/billing/subscription/cancel', answers, { token });
+  return data;
+}
+
+export async function resumeMembership(token: string): Promise<Billing> {
+  const { data } = await apiPost<Billing>('/app/billing/subscription/resume', undefined, { token });
+  return data;
+}
+
+/** Stripe Customer Portal: update the card. */
 export async function billingPortalUrl(token: string): Promise<string> {
   const { data } = await apiPost<{ url: string }>('/app/billing/portal', undefined, { token });
   return data.url;

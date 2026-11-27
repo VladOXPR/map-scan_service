@@ -53,6 +53,8 @@ export type AppRental = {
   endedAt: string | null;
   /** Lost power bank fee frozen at unlock. */
   buyoutCents: number | null;
+  /** When the lost power bank fee is charged if it isn't back; null for kiosk rentals. */
+  returnBy?: string | null;
   chargedCents: number | null;
   currency: string | null;
   cardLast4: string | null;
@@ -76,6 +78,12 @@ export async function requestUnlock(
 
 export async function fetchRental(token: string, rentalId: string): Promise<AppRental> {
   const { data } = await apiGet<AppRental>(`/app/rentals/${encodeURIComponent(rentalId)}`, { token });
+  return data;
+}
+
+/** Newest first. */
+export async function fetchRentals(token: string, limit = 50): Promise<AppRental[]> {
+  const { data } = await apiGet<AppRental[]>(`/app/rentals?limit=${limit}`, { token });
   return data;
 }
 

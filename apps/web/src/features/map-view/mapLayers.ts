@@ -123,8 +123,11 @@ export function addStationLayers(
   });
 }
 
-/** Walking route + user puck, stacked route → puck → stations. */
-export function addOverlayLayers(map: mapboxgl.Map) {
+/**
+ * Walking route + user puck, stacked route → puck → stations.
+ * `bluePuck` fills the puck core with the app's blue instead of black.
+ */
+export function addOverlayLayers(map: mapboxgl.Map, { bluePuck = false }: { bluePuck?: boolean } = {}) {
   if (!map.getSource(PUCK_SOURCE)) {
     map.addSource(PUCK_SOURCE, { type: "geojson", data: EMPTY });
   }
@@ -155,7 +158,7 @@ export function addOverlayLayers(map: mapboxgl.Map) {
         paint: {
           "circle-pitch-alignment": "map",
           "circle-radius": PULSE_CORE,
-          "circle-color": "#000000",
+          "circle-color": bluePuck ? PUCK_FILL : "#000000",
           "circle-stroke-color": "#ffffff",
           "circle-stroke-width": 3,
         },

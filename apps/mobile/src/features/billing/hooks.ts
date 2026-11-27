@@ -6,10 +6,13 @@ import { setAnalyticsMembership, tracker } from '@/lib/analytics';
 import { useAuthStore } from '@/store/authStore';
 import {
   billingPortalUrl,
+  cancelMembership,
   fetchBilling,
+  resumeMembership,
   startSubscription,
   walletLabel,
   type Billing,
+  type CancelReason,
 } from './api';
 import { useMembershipCheckout } from './stripe';
 import type { CheckoutOutcome } from './types';
@@ -189,7 +192,36 @@ export function useSubscribe() {
   return { state, subscribe, checkAgain, reset };
 }
 
-/** Opens the Stripe Customer Portal (update card, cancel). */
+/** In-app cancel and undo; both answer with the fresh billing view. */
+export function useCancelMembership() {
+  const session = useAuthStore((s) => s.session);
+  const queryClient = useQueryClient();
+
+  const apply = useCallback(
+    (billing: Billing) => {
+      if (session) queryClient.setQueryData(billingKey(session.user.userId), billing);
+      return billing;
+    },
+    [queryClient, session],
+  );
+
+  const cancel = useCallback(
+    async (answers: { reasons: CancelReason[]; comment: string | null }) => {
+      if (!session) throw new Error('Signed out');
+      return apply(await cancelMembership(session.token, answers));
+    },
+    [apply, session],
+  );
+
+  const resume = useCallback(async () => {
+    if (!session) throw new Error('Signed out');
+    return apply(await resumeMembership(session.token));
+  }, [apply, session]);
+
+  return { cancel, resume };
+}
+
+/** Opens the Stripe Customer Portal (update card). */
 export function useManageMembership() {
   const session = useAuthStore((s) => s.session);
   const queryClient = useQueryClient();

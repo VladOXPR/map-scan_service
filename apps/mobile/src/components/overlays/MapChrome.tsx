@@ -8,12 +8,15 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { QrTapIcon, Text } from '@/components/ui';
-import { GradientButton } from '@/components/ui/GradientButton';
+import { BORDER, GRADIENT, GradientButton } from '@/components/ui/GradientButton';
+import { useRentalClock } from '@/features/rentals/useRentalClock';
 import { colors, motion, radius, spacing } from '@/theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const stationIcon = require('@cuub/assets/illustrations/Station.png');
+const batteryTile = require('@cuub/assets/illustrations/BatteryTile.png');
 const locationArrowIcon = require('@cuub/assets/map/location-arrow.png');
 const locationArrowUnsharedIcon = require('@cuub/assets/map/location-arrow-unshared.png');
 
@@ -133,7 +136,7 @@ export function EnableLocationButton({
   );
 }
 
-/** Beside the account button. */
+/** Top right, across from the account button. */
 export function SupportButton({ onPress }: { onPress: () => void }) {
   const insets = useSafeAreaInsets();
   const scale = useSharedValue(1);
@@ -210,12 +213,10 @@ type ScanButtonProps = {
   onPress: (tile: TileFrame | null) => void;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
-  /** Without the tile the scanner simply fades in. */
-  showIcon?: boolean;
 };
 
-/** Blue Scan button; with the QR tile, the scanner page grows out of it. */
-export function ScanButton({ label, onPress, disabled, style, showIcon = true }: ScanButtonProps) {
+/** Blue Scan button; the scanner page grows out of its QR tile. */
+export function ScanButton({ label, onPress, disabled, style }: ScanButtonProps) {
   const tileRef = useRef<View>(null);
 
   const press = () => {
@@ -234,13 +235,26 @@ export function ScanButton({ label, onPress, disabled, style, showIcon = true }:
       disabled={disabled}
       style={style}
       labelStyle={styles.scanLabel}
+      iconPosition="left"
       icon={
-        showIcon ? (
-          <View ref={tileRef} collapsable={false}>
-            <QrTapIcon size={SCAN_TILE} />
-          </View>
-        ) : null
+        <View ref={tileRef} collapsable={false}>
+          <QrTapIcon size={SCAN_TILE} />
+        </View>
       }
+    />
+  );
+}
+
+/** Takes the Scan button's place while a power bank is out: live rental time. */
+export function RentalClockButton({ startedAt, onPress }: { startedAt: string; onPress: () => void }) {
+  const clock = useRentalClock(startedAt);
+  return (
+    <GradientButton
+      label={clock}
+      onPress={onPress}
+      labelStyle={styles.rentalClock}
+      iconPosition="left"
+      icon={<Image source={batteryTile} style={styles.rentalButtonTile} />}
     />
   );
 }
@@ -255,9 +269,91 @@ export function UnlockBar({ onPress }: { onPress: (tile: TileFrame | null) => vo
   );
 }
 
+/** Bottom bar while a power bank is out: live rental time; tap or swipe up for return spots. */
+export function RentalBar({ startedAt, onPress }: { startedAt: string; onPress: () => void }) {
+  const insets = useSafeAreaInsets();
+  const clock = useRentalClock(startedAt);
+  const scale = useSharedValue(1);
+  const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  const swipeUp = Gesture.Pan()
+    .activeOffsetY(-16)
+    .failOffsetX([-48, 48])
+    .onEnd((event) => {
+      if (event.translationY < -20 || event.velocityY < -350) {
+        runOnJS(onPress)();
+      }
+    });
+
+  return (
+    <GestureDetector gesture={swipeUp}>
+      <View style={[styles.findBar, { paddingBottom: Math.max(insets.bottom, spacing[4]) }]}>
+        <AnimatedPressable
+          accessibilityRole="button"
+          accessibilityLabel={`Battery in use, ${clock}`}
+          accessibilityHint="Shows where to return it"
+          onPress={onPress}
+          onPressIn={() => {
+            scale.value = withTiming(0.98, { duration: motion.fast });
+          }}
+          onPressOut={() => {
+            scale.value = withTiming(1, { duration: motion.fast });
+          }}
+          style={[styles.rentalBar, pressStyle]}
+        >
+          <LinearGradient
+            colors={[...GRADIENT]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.rentalBarInner}
+          >
+            <Image source={batteryTile} style={styles.rentalTile} />
+            <Text variant="button" color={colors.white} style={styles.rentalLabel} numberOfLines={1}>
+              Battery in use
+            </Text>
+            <Text variant="button" color={colors.white} style={styles.rentalClock}>
+              {clock}
+            </Text>
+          </LinearGradient>
+        </AnimatedPressable>
+      </View>
+    </GestureDetector>
+  );
+}
+
 const styles = StyleSheet.create({
   scanLabel: {
     fontWeight: '800',
+  },
+  rentalBar: {
+    borderRadius: radius.button + 4,
+    borderWidth: 2,
+    borderColor: BORDER,
+    overflow: 'hidden',
+  },
+  rentalBarInner: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    paddingLeft: 8,
+    paddingRight: spacing[5],
+  },
+  rentalTile: {
+    width: 40,
+    height: 40,
+  },
+  rentalButtonTile: {
+    width: SCAN_TILE,
+    height: SCAN_TILE,
+  },
+  rentalLabel: {
+    flex: 1,
+    fontWeight: '800',
+  },
+  rentalClock: {
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
   },
   distancePill: {
     flexDirection: 'row',
@@ -343,7 +439,7 @@ const styles = StyleSheet.create({
   },
   supportWrap: {
     position: 'absolute',
-    left: spacing[5] + PROFILE_SIZE + spacing[2],
+    right: spacing[5],
     zIndex: 20,
   },
   supportButton: {

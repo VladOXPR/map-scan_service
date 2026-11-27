@@ -5,6 +5,7 @@ export * from './TextInput';
 export * from './OtpInput';
 export * from './Header';
 export * from './Card';
+export * from './Chip';
 export * from './LoadingState';
 export * from './EmptyState';
 export * from './Screen';

@@ -269,8 +269,8 @@ export default function MembershipScreen() {
             ) : null}
             <Text variant="caption" muted>
               {`Renews every ${plan.interval} at ${formatMoney(plan.amountCents, plan.currency)} until you cancel. ` +
-                'Return your power bank to rent the next one. ' +
-                `If you lose it, pay the ${formatMoney(plan.buyoutCents, plan.currency)} lost power bank fee to keep unlocking.`}
+                'Return your power bank within a month to rent the next one. ' +
+                `If it isn't back by then, the ${formatMoney(plan.buyoutCents, plan.currency)} lost power bank fee is charged to your card.`}
             </Text>
           </View>
         ) : null}

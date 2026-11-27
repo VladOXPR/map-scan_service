@@ -22,8 +22,10 @@ function toCoords(position: GeolocationPosition): Coords {
  * Browser location for the map. Never prompts on its own: position is read
  * silently only when the browser already reports the permission as granted,
  * otherwise callers go through `request()` after a user action.
+ *
+ * With `mock`, the browser is never asked and the user is always at `mock`.
  */
-export function useGeolocation() {
+export function useGeolocation(mock: Coords | null = null) {
   const [permission, setPermission] = useState<LocationPermission>("unknown");
   const [coords, setCoords] = useState<Coords | null>(null);
   const watchIdRef = useRef<number | null>(null);
@@ -43,6 +45,7 @@ export function useGeolocation() {
   }, []);
 
   const request = useCallback((): Promise<Coords | null> => {
+    if (mock) return Promise.resolve(mock);
     if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
       setPermission("unsupported");
       return Promise.resolve(null);
@@ -64,9 +67,10 @@ export function useGeolocation() {
         POSITION_OPTIONS
       );
     });
-  }, [startWatching]);
+  }, [mock, startWatching]);
 
   useEffect(() => {
+    if (mock) return;
     if (!("geolocation" in navigator)) {
       setPermission("unsupported");
       return;
@@ -99,7 +103,8 @@ export function useGeolocation() {
         watchIdRef.current = null;
       }
     };
-  }, [startWatching]);
+  }, [mock, startWatching]);
 
+  if (mock) return { permission: "granted" as LocationPermission, coords: mock, request };
   return { permission, coords, request };
 }

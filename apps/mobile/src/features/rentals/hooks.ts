@@ -12,6 +12,7 @@ import {
   checkoutBuyout,
   fetchActiveRental,
   fetchRental,
+  fetchRentals,
   fetchStationByCode,
   requestUnlock,
   type AppRental,
@@ -39,6 +40,19 @@ export function useStationByCode(code: string | null) {
   });
 }
 
+export function rentalHistoryKey(userId: string | undefined) {
+  return ['rental-history', userId ?? 'signed-out'] as const;
+}
+
+export function useRentalHistory() {
+  const session = useAuthStore((s) => s.session);
+  return useQuery({
+    queryKey: rentalHistoryKey(session?.user.userId),
+    queryFn: () => fetchRentals(session!.token),
+    enabled: Boolean(session?.token),
+  });
+}
+
 function minutesBetween(from: string, to: string | null): number | undefined {
   if (!to) return undefined;
   const ms = new Date(to).getTime() - new Date(from).getTime();
@@ -47,7 +61,8 @@ function minutesBetween(from: string, to: string | null): number | undefined {
 
 /**
  * The signed-in person's open rental (map card). Polls quickly while the
- * cabinet is releasing, slowly while out, and notices the return.
+ * cabinet is releasing and every few seconds while out, so the return shows
+ * up even without the rental push (see `usePushNavigation`).
  */
 export function useActiveRental() {
   const session = useAuthStore((s) => s.session);
@@ -59,7 +74,7 @@ export function useActiveRental() {
     refetchInterval: (q) => {
       const rental = q.state.data;
       if (!rental) return 120_000;
-      return rental.status === 'PENDING_UNLOCK' ? 3_000 : 30_000;
+      return rental.status === 'PENDING_UNLOCK' ? 3_000 : 5_000;
     },
   });
 
@@ -78,6 +93,8 @@ export function useActiveRental() {
     previous.current = current;
     if (!session || !before || before.status !== 'ACTIVE') return;
     if (current && current.rentalId === before.rentalId) return;
+    void queryClient.invalidateQueries({ queryKey: feedbackDueKey(session.user.userId) });
+    void queryClient.invalidateQueries({ queryKey: billingKey(session.user.userId) });
     void (async () => {
       try {
         const final = await fetchRental(session.token, before.rentalId);
@@ -90,8 +107,6 @@ export function useActiveRental() {
       } catch {
         // The card already disappeared; the server has the return either way.
       }
-      void queryClient.invalidateQueries({ queryKey: billingKey(session.user.userId) });
-      void queryClient.invalidateQueries({ queryKey: feedbackDueKey(session.user.userId) });
     })();
   }, [current, queryClient, session]);
 
@@ -140,6 +155,7 @@ export function useUnlock(defaultCode?: string) {
     (stationCode: string) => {
       if (!session) return;
       void queryClient.invalidateQueries({ queryKey: activeRentalKey(session.user.userId) });
+      void queryClient.invalidateQueries({ queryKey: rentalHistoryKey(session.user.userId) });
       void queryClient.invalidateQueries({ queryKey: ['station-by-code', stationCode] });
     },
     [queryClient, session],

@@ -70,10 +70,8 @@ export default function OtpScreen() {
       const result = await verifySmsCode(phone, nextCode);
       tracker.track('otp_verified', { isNewUser: result.isNewUser });
       await setSession({ token: result.token, user: result.user });
-      // New signup / re-register after delete → "Welcome to CUUB".
-      // Existing returning account → "Welcome back".
-      const showNew = await shouldShowNewUserWelcome(phone, result.isNewUser);
-      armWelcome(showNew ? 'new' : 'back');
+      // New signup / re-register after delete → "Welcome to CUUB". Returning accounts go straight to the map.
+      if (await shouldShowNewUserWelcome(phone, result.isNewUser)) armWelcome('new');
       // Existing phone-only accounts see the profile step here too.
       router.replace(
         result.user.profileComplete

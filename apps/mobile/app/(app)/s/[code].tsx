@@ -91,7 +91,7 @@ export default function StationScreen() {
 
   const leave = useCallback(() => {
     if (router.canGoBack()) router.back();
-    else router.replace('/(app)');
+    else router.dismissTo('/(app)');
   }, [router]);
 
   /** Every unlock plays the scanner's release over this screen: the spinning diamond, then the power bank sliding out. */
@@ -140,7 +140,7 @@ export default function StationScreen() {
         title="That isn't a CUUB station"
         description="Scan the QR code on the front of a CUUB station."
         actionLabel="Back to map"
-        onAction={() => router.replace('/(app)')}
+        onAction={() => router.dismissTo('/(app)')}
       />
     );
   }
@@ -154,7 +154,7 @@ export default function StationScreen() {
         title={notFound ? 'Station not found' : "Couldn't load this station"}
         description={notFound ? 'This code does not match a CUUB station.' : 'Check your connection and try again.'}
         actionLabel={notFound ? 'Back to map' : 'Try again'}
-        onAction={() => (notFound ? router.replace('/(app)') : void station.refetch())}
+        onAction={() => (notFound ? router.dismissTo('/(app)') : void station.refetch())}
       />
     );
   }
@@ -245,7 +245,7 @@ export default function StationScreen() {
               label="Back to map"
               variant="secondary"
               disabled={payingLostFee}
-              onPress={() => router.replace('/(app)')}
+              onPress={() => router.dismissTo('/(app)')}
             />
           </>
         );
@@ -269,7 +269,7 @@ export default function StationScreen() {
             onPress={() => {
               blockedTap(reason);
               if (reason === 'BUSY') void station.refetch();
-              else router.replace('/(app)');
+              else router.dismissTo('/(app)');
             }}
           />
         );
