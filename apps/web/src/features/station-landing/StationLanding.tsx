@@ -102,7 +102,7 @@ export function StationLanding({ code, station, origin, webVisitorId }: StationL
 
         <ol className="station-landing-steps">
           <li>Get the CUUB app</li>
-          <li>Sign up and start your membership</li>
+          <li>Sign up and get your Pass</li>
           <li>Tap Unlock and take a power bank</li>
         </ol>
 

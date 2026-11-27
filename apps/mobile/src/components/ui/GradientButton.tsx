@@ -4,6 +4,7 @@ import {
   StyleSheet,
   View,
   type StyleProp,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,8 +19,8 @@ import { colors, motion, radius, spacing } from '@/theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-const GRADIENT = ['#22B0F6', '#1F68E0'] as const;
-const BORDER = '#49B6FF';
+export const GRADIENT = ['#22B0F6', '#1F68E0'] as const;
+export const BORDER = '#49B6FF';
 
 type GradientButtonProps = {
   label: string;
@@ -27,7 +28,9 @@ type GradientButtonProps = {
   disabled?: boolean;
   loading?: boolean;
   icon?: ReactNode;
+  iconPosition?: 'left' | 'right';
   style?: StyleProp<ViewStyle>;
+  labelStyle?: StyleProp<TextStyle>;
 };
 
 export function GradientButton({
@@ -36,7 +39,9 @@ export function GradientButton({
   disabled = false,
   loading = false,
   icon,
+  iconPosition = 'right',
   style,
+  labelStyle,
 }: GradientButtonProps) {
   const scale = useSharedValue(1);
   const inactive = disabled || loading;
@@ -69,10 +74,11 @@ export function GradientButton({
           <ActivityIndicator color={colors.white} />
         ) : (
           <View style={styles.content}>
-            <Text variant="button" color={colors.white}>
+            {iconPosition === 'left' ? icon : null}
+            <Text variant="button" color={colors.white} style={labelStyle}>
               {label}
             </Text>
-            {icon}
+            {iconPosition === 'right' ? icon : null}
           </View>
         )}
       </LinearGradient>

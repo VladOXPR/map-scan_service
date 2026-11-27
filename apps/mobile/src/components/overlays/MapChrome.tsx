@@ -1,4 +1,5 @@
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { useRef } from 'react';
+import { Image, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -7,14 +8,37 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { Text } from '@/components/ui';
-import { GradientButton } from '@/components/ui/GradientButton';
+import { LinearGradient } from 'expo-linear-gradient';
+import { QrTapIcon, Text } from '@/components/ui';
+import { BORDER, GRADIENT, GradientButton } from '@/components/ui/GradientButton';
+import { useRentalClock } from '@/features/rentals/useRentalClock';
 import { colors, motion, radius, spacing } from '@/theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const stationIcon = require('@cuub/assets/illustrations/Station.png');
+const batteryTile = require('@cuub/assets/illustrations/BatteryTile.png');
 const locationArrowIcon = require('@cuub/assets/map/location-arrow.png');
 const locationArrowUnsharedIcon = require('@cuub/assets/map/location-arrow-unshared.png');
+
+const PROFILE_SIZE = 44;
+const SUPPORT_WIDTH = 98;
+/** The QR tile inside the Scan to start button. */
+const SCAN_TILE = 32;
+
+/** A square on screen, in window coordinates; the scanner page grows out of the Scan button's QR tile. */
+export type TileFrame = { x: number; y: number; size: number };
+
+/** The scanner's `tile` route param: "x,y,size". */
+export function tileParam(tile: TileFrame): string {
+  return `${tile.x},${tile.y},${tile.size}`;
+}
+
+export function parseTileParam(value: unknown): TileFrame | null {
+  if (typeof value !== 'string') return null;
+  const [x, y, size] = value.split(',').map(Number);
+  if (![x, y, size].every(Number.isFinite) || size <= 0) return null;
+  return { x, y, size };
+}
 
 /** Height of the nearest-location bar above the screen bottom (padding + button). */
 export function nearestBarHeight(bottomInset: number) {
@@ -23,11 +47,11 @@ export function nearestBarHeight(bottomInset: number) {
   return spacing[4] + button + barBottomPad;
 }
 
-type ProfileButtonProps = {
-  onPress: () => void;
-};
+function locateBottom(bottomInset: number) {
+  return nearestBarHeight(bottomInset) + spacing[3];
+}
 
-export function ProfileButton({ onPress }: ProfileButtonProps) {
+export function ProfileButton({ onPress }: { onPress: () => void }) {
   const insets = useSafeAreaInsets();
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
@@ -61,15 +85,12 @@ export function ProfileButton({ onPress }: ProfileButtonProps) {
 type EnableLocationButtonProps = {
   onPress: () => void;
   locationShared?: boolean;
-  /** Extra lift when the active-rental card sits above the bar. */
-  raise?: number;
 };
 
 /** Blue locate control — above Nearest location. Icon reflects share state. */
 export function EnableLocationButton({
   onPress,
   locationShared = false,
-  raise = 0,
 }: EnableLocationButtonProps) {
   const insets = useSafeAreaInsets();
   const scale = useSharedValue(1);
@@ -84,7 +105,7 @@ export function EnableLocationButton({
         styles.locationWrap,
         {
           right: spacing[5],
-          bottom: nearestBarHeight(insets.bottom) + spacing[3] + raise,
+          bottom: locateBottom(insets.bottom),
         },
       ]}
     >
@@ -115,52 +136,8 @@ export function EnableLocationButton({
   );
 }
 
-/** Scan a station QR — mirrors the locate control on the left. */
-export function ScanButton({ onPress, raise = 0 }: { onPress: () => void; raise?: number }) {
-  const insets = useSafeAreaInsets();
-  const scale = useSharedValue(1);
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  return (
-    <View
-      pointerEvents="box-none"
-      style={[
-        styles.locationWrap,
-        { left: spacing[5], bottom: nearestBarHeight(insets.bottom) + spacing[3] + raise },
-      ]}
-    >
-      <AnimatedPressable
-        accessibilityRole="button"
-        accessibilityLabel="Scan a station to unlock"
-        onPress={onPress}
-        onPressIn={() => {
-          scale.value = withTiming(0.96, { duration: motion.fast });
-        }}
-        onPressOut={() => {
-          scale.value = withTiming(1, { duration: motion.fast });
-        }}
-        style={[styles.scanButton, animatedStyle]}
-      >
-        <View style={styles.scanGlyph}>
-          <View style={[styles.scanCorner, { top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2 }]} />
-          <View style={[styles.scanCorner, { top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2 }]} />
-          <View style={[styles.scanCorner, { bottom: 0, left: 0, borderBottomWidth: 2, borderLeftWidth: 2 }]} />
-          <View style={[styles.scanCorner, { bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2 }]} />
-          <View style={styles.scanLine} />
-        </View>
-        <Text style={styles.scanLabel}>Scan</Text>
-      </AnimatedPressable>
-    </View>
-  );
-}
-
-type SupportButtonProps = {
-  onPress: () => void;
-};
-
-export function SupportButton({ onPress }: SupportButtonProps) {
+/** Top right, across from the account button. */
+export function SupportButton({ onPress }: { onPress: () => void }) {
   const insets = useSafeAreaInsets();
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
@@ -190,10 +167,11 @@ export function SupportButton({ onPress }: SupportButtonProps) {
 
 type FindChargerBarProps = {
   onPress: () => void;
+  label?: string;
   distanceLabel?: string | null;
 };
 
-export function FindChargerBar({ onPress, distanceLabel }: FindChargerBarProps) {
+export function FindChargerBar({ onPress, label = 'Nearest location', distanceLabel }: FindChargerBarProps) {
   const insets = useSafeAreaInsets();
 
   const swipeUp = Gesture.Pan()
@@ -214,7 +192,7 @@ export function FindChargerBar({ onPress, distanceLabel }: FindChargerBarProps) 
         ]}
       >
         <GradientButton
-          label="Nearest location"
+          label={label}
           onPress={onPress}
           icon={
             distanceLabel ? (
@@ -230,7 +208,153 @@ export function FindChargerBar({ onPress, distanceLabel }: FindChargerBarProps) 
   );
 }
 
+type ScanButtonProps = {
+  label: string;
+  onPress: (tile: TileFrame | null) => void;
+  disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
+};
+
+/** Blue Scan button; the scanner page grows out of its QR tile. */
+export function ScanButton({ label, onPress, disabled, style }: ScanButtonProps) {
+  const tileRef = useRef<View>(null);
+
+  const press = () => {
+    const tile = tileRef.current;
+    if (!tile) {
+      onPress(null);
+      return;
+    }
+    tile.measureInWindow((x, y, width) => onPress(width > 0 ? { x, y, size: width } : null));
+  };
+
+  return (
+    <GradientButton
+      label={label}
+      onPress={press}
+      disabled={disabled}
+      style={style}
+      labelStyle={styles.scanLabel}
+      iconPosition="left"
+      icon={
+        <View ref={tileRef} collapsable={false}>
+          <QrTapIcon size={SCAN_TILE} />
+        </View>
+      }
+    />
+  );
+}
+
+/** Takes the Scan button's place while a power bank is out: live rental time. */
+export function RentalClockButton({ startedAt, onPress }: { startedAt: string; onPress: () => void }) {
+  const clock = useRentalClock(startedAt);
+  return (
+    <GradientButton
+      label={clock}
+      onPress={onPress}
+      labelStyle={styles.rentalClock}
+      iconPosition="left"
+      icon={<Image source={batteryTile} style={styles.rentalButtonTile} />}
+    />
+  );
+}
+
+/** Bottom bar: scan a station to start a rental. */
+export function UnlockBar({ onPress }: { onPress: (tile: TileFrame | null) => void }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.findBar, { paddingBottom: Math.max(insets.bottom, spacing[4]) }]}>
+      <ScanButton label="Scan to start" onPress={onPress} />
+    </View>
+  );
+}
+
+/** Bottom bar while a power bank is out: live rental time; tap or swipe up for return spots. */
+export function RentalBar({ startedAt, onPress }: { startedAt: string; onPress: () => void }) {
+  const insets = useSafeAreaInsets();
+  const clock = useRentalClock(startedAt);
+  const scale = useSharedValue(1);
+  const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  const swipeUp = Gesture.Pan()
+    .activeOffsetY(-16)
+    .failOffsetX([-48, 48])
+    .onEnd((event) => {
+      if (event.translationY < -20 || event.velocityY < -350) {
+        runOnJS(onPress)();
+      }
+    });
+
+  return (
+    <GestureDetector gesture={swipeUp}>
+      <View style={[styles.findBar, { paddingBottom: Math.max(insets.bottom, spacing[4]) }]}>
+        <AnimatedPressable
+          accessibilityRole="button"
+          accessibilityLabel={`Battery in use, ${clock}`}
+          accessibilityHint="Shows where to return it"
+          onPress={onPress}
+          onPressIn={() => {
+            scale.value = withTiming(0.98, { duration: motion.fast });
+          }}
+          onPressOut={() => {
+            scale.value = withTiming(1, { duration: motion.fast });
+          }}
+          style={[styles.rentalBar, pressStyle]}
+        >
+          <LinearGradient
+            colors={[...GRADIENT]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.rentalBarInner}
+          >
+            <Image source={batteryTile} style={styles.rentalTile} />
+            <Text variant="button" color={colors.white} style={styles.rentalLabel} numberOfLines={1}>
+              Battery in use
+            </Text>
+            <Text variant="button" color={colors.white} style={styles.rentalClock}>
+              {clock}
+            </Text>
+          </LinearGradient>
+        </AnimatedPressable>
+      </View>
+    </GestureDetector>
+  );
+}
+
 const styles = StyleSheet.create({
+  scanLabel: {
+    fontWeight: '800',
+  },
+  rentalBar: {
+    borderRadius: radius.button + 4,
+    borderWidth: 2,
+    borderColor: BORDER,
+    overflow: 'hidden',
+  },
+  rentalBarInner: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    paddingLeft: 8,
+    paddingRight: spacing[5],
+  },
+  rentalTile: {
+    width: 40,
+    height: 40,
+  },
+  rentalButtonTile: {
+    width: SCAN_TILE,
+    height: SCAN_TILE,
+  },
+  rentalLabel: {
+    flex: 1,
+    fontWeight: '800',
+  },
+  rentalClock: {
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
   distancePill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -275,9 +399,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   profileButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: PROFILE_SIZE,
+    height: PROFILE_SIZE,
+    borderRadius: PROFILE_SIZE / 2,
     backgroundColor: '#161616',
     borderWidth: 1,
     borderColor: colors.border,
@@ -313,50 +437,18 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
     tintColor: colors.white,
   },
-  scanButton: {
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#161616',
-    borderWidth: 1,
-    borderColor: colors.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    paddingHorizontal: spacing[4],
-  },
-  scanGlyph: {
-    width: 18,
-    height: 18,
-    justifyContent: 'center',
-  },
-  scanCorner: {
-    position: 'absolute',
-    width: 6,
-    height: 6,
-    borderColor: colors.white,
-  },
-  scanLine: {
-    height: 2,
-    marginHorizontal: 3,
-    backgroundColor: colors.white,
-    borderRadius: 1,
-  },
-  scanLabel: {
-    color: colors.white,
-    fontSize: 15,
-    lineHeight: 18,
-    fontWeight: '600',
-  },
   supportWrap: {
     position: 'absolute',
     right: spacing[5],
     zIndex: 20,
   },
   supportButton: {
+    width: SUPPORT_WIDTH,
+    height: PROFILE_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#161616',
     borderRadius: radius.pill,
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2] + 2,
     borderWidth: 1,
     borderColor: colors.border,
   },

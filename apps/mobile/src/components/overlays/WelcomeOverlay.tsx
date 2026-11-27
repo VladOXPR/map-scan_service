@@ -22,7 +22,6 @@ const HOLD_MS = 3000;
 
 const COPY: Record<WelcomeVariant, string> = {
   new: 'Welcome to CUUB',
-  back: 'Welcome back',
 };
 
 /** Full-screen welcome that fades out after ~3s. */

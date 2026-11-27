@@ -86,12 +86,13 @@ export function stationsToGeoJSON(
 
 export type LineFeature = {
   type: "Feature";
-  properties: Record<string, never>;
+  /** `durationSeconds` is Mapbox's walking time; absent on the straight-line fallback. */
+  properties: { durationSeconds?: number };
   geometry: { type: "LineString"; coordinates: [number, number][] };
 };
 
 type DirectionsResponse = {
-  routes?: Array<{ geometry?: { coordinates?: [number, number][] } }>;
+  routes?: Array<{ duration?: number; geometry?: { coordinates?: [number, number][] } }>;
 };
 
 function straightLine(from: Coords, to: Coords): LineFeature {
@@ -123,9 +124,15 @@ export async function fetchWalkingRoute(
     const res = await fetch(url);
     if (!res.ok) return straightLine(from, to);
     const data = (await res.json()) as DirectionsResponse;
-    const coordinates = data.routes?.[0]?.geometry?.coordinates;
+    const route = data.routes?.[0];
+    const coordinates = route?.geometry?.coordinates;
     if (!coordinates?.length) return straightLine(from, to);
-    return { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates } };
+    const duration = route?.duration;
+    return {
+      type: "Feature",
+      properties: typeof duration === "number" && Number.isFinite(duration) ? { durationSeconds: duration } : {},
+      geometry: { type: "LineString", coordinates },
+    };
   } catch {
     return straightLine(from, to);
   }

@@ -7,8 +7,20 @@ export type UnlockBlockReason =
   | 'EMPTY'
   | 'BUSY'
   | 'NO_PROFILE'
-  | 'UNPAID_BUYOUT'
   | 'NO_SUBSCRIPTION';
+
+const UNLOCK_BLOCK_REASONS: readonly string[] = [
+  'RENTAL_OPEN',
+  'OFFLINE',
+  'EMPTY',
+  'BUSY',
+  'NO_PROFILE',
+  'NO_SUBSCRIPTION',
+] satisfies UnlockBlockReason[];
+
+export function isUnlockBlockReason(value: string): value is UnlockBlockReason {
+  return UNLOCK_BLOCK_REASONS.includes(value);
+}
 
 export type StationByCode = {
   code: string;
@@ -39,9 +51,10 @@ export type AppRental = {
   slot: number | null;
   startedAt: string;
   endedAt: string | null;
-  returnBy: string | null;
-  maxRentHours: number | null;
+  /** Lost power bank fee frozen at unlock. */
   buyoutCents: number | null;
+  /** When the lost power bank fee is charged if it isn't back; null for kiosk rentals. */
+  returnBy?: string | null;
   chargedCents: number | null;
   currency: string | null;
   cardLast4: string | null;
@@ -68,7 +81,37 @@ export async function fetchRental(token: string, rentalId: string): Promise<AppR
   return data;
 }
 
+/** Newest first. */
+export async function fetchRentals(token: string, limit = 50): Promise<AppRental[]> {
+  const { data } = await apiGet<AppRental[]>(`/app/rentals?limit=${limit}`, { token });
+  return data;
+}
+
 export async function fetchActiveRental(token: string): Promise<AppRental | null> {
   const { data } = await apiGet<{ rental: AppRental | null }>('/app/rentals/active', { token });
   return data.rental;
+}
+
+export type BuyoutCheckout =
+  | { status: 'paid' | 'processing'; rentalId: string }
+  | {
+      status: 'requires_payment';
+      rentalId: string;
+      amountCents: number;
+      currency: string;
+      customerId: string;
+      ephemeralKeySecret: string;
+      clientSecret: string;
+    };
+
+export type PayableBuyout = Extract<BuyoutCheckout, { status: 'requires_payment' }>;
+
+/** Pays for a lost membership power bank; ask again after PaymentSheet until `paid`. */
+export async function checkoutBuyout(token: string, rentalId: string): Promise<BuyoutCheckout> {
+  const { data } = await apiPost<BuyoutCheckout>(
+    `/app/rentals/${encodeURIComponent(rentalId)}/buyout`,
+    undefined,
+    { token },
+  );
+  return data;
 }

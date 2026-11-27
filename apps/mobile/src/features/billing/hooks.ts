@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '@cuub/core';
@@ -6,10 +6,13 @@ import { setAnalyticsMembership, tracker } from '@/lib/analytics';
 import { useAuthStore } from '@/store/authStore';
 import {
   billingPortalUrl,
+  cancelMembership,
   fetchBilling,
+  resumeMembership,
   startSubscription,
   walletLabel,
   type Billing,
+  type CancelReason,
 } from './api';
 import { useMembershipCheckout } from './stripe';
 import type { CheckoutOutcome } from './types';
@@ -18,7 +21,7 @@ export function billingKey(userId: string | undefined) {
   return ['billing', userId ?? 'signed-out'] as const;
 }
 
-/** Membership, plan on sale and any unpaid buyout for the signed-in person. */
+/** Membership and plan on sale for the signed-in person. */
 export function useBilling() {
   const session = useAuthStore((s) => s.session);
   const query = useQuery({
@@ -38,7 +41,10 @@ export function useBilling() {
 }
 
 const ACTIVATION_POLL_MS = 1500;
-const ACTIVATION_TIMEOUT_MS = 30_000;
+/** How long the button spins before the screen says the payment is in and keeps checking quietly. */
+const ACTIVATION_SPIN_MS = 15_000;
+const PENDING_POLL_MS = 4000;
+const PENDING_TIMEOUT_MS = 3 * 60_000;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -49,15 +55,17 @@ export type SubscribeState =
   | { phase: 'preparing' }
   | { phase: 'paying' }
   | { phase: 'activating' }
+  /** Paid, but Stripe has not reported the subscription active yet. Never ask to pay again here. */
+  | { phase: 'pending' }
   | { phase: 'active' }
   | { phase: 'error'; message: string };
 
 const ERROR_COPY: Record<string, string> = {
-  ALREADY_SUBSCRIBED: 'You already have an active membership.',
-  NO_PROFILE: 'Finish your profile before starting a membership.',
-  NO_PLAN: 'Memberships are not available right now. Try again later.',
+  ALREADY_SUBSCRIBED: 'You already have an active Pass.',
+  NO_PROFILE: 'Finish your profile before getting a Pass.',
+  NO_PLAN: 'CUUB Pass is not available right now. Try again later.',
   stripe_not_configured: 'Payments are not set up in this build.',
-  unsupported_platform: 'Get the CUUB app to start a membership.',
+  unsupported_platform: 'Get the CUUB app to get a Pass.',
 };
 
 function errorMessage(code: string | undefined, fallback?: string): string {
@@ -73,6 +81,48 @@ export function useSubscribe() {
   const queryClient = useQueryClient();
   const checkout = useMembershipCheckout();
   const [state, setState] = useState<SubscribeState>({ phase: 'idle' });
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  /** One Stripe re-read; stores the result so every screen sees the new membership. */
+  const readActive = useCallback(async (): Promise<Billing | null> => {
+    if (!session) return null;
+    try {
+      const latest = await fetchBilling(session.token, true);
+      queryClient.setQueryData(billingKey(session.user.userId), latest);
+      return latest;
+    } catch {
+      return null;
+    }
+  }, [queryClient, session]);
+
+  const markActive = useCallback(
+    (billing: Billing) => {
+      tracker.track('membership_active_seen', { status: billing.membership.status });
+      void queryClient.invalidateQueries({ queryKey: ['station-by-code'] });
+      setState({ phase: 'active' });
+    },
+    [queryClient],
+  );
+
+  /** Polls fast while the button spins, then slower behind the "payment received" state. */
+  const waitForActive = useCallback(async (): Promise<Billing | null> => {
+    const started = Date.now();
+    let latest: Billing | null = null;
+    while (mounted.current && Date.now() - started < PENDING_TIMEOUT_MS) {
+      latest = (await readActive()) ?? latest;
+      if (latest?.membership.active) return latest;
+      const spinning = Date.now() - started < ACTIVATION_SPIN_MS;
+      if (!spinning) setState((s) => (s.phase === 'activating' ? { phase: 'pending' } : s));
+      await sleep(spinning ? ACTIVATION_POLL_MS : PENDING_POLL_MS);
+    }
+    return latest;
+  }, [readActive]);
 
   const subscribe = useCallback(
     async (billing: Billing): Promise<boolean> => {
@@ -87,12 +137,15 @@ export function useSubscribe() {
         const setup = await startSubscription(session.token);
         setState({ phase: 'paying' });
         tracker.track('payment_sheet_opened', { planId });
-        const name = [session.user.firstName, session.user.lastName].filter(Boolean).join(' ');
-        outcome = await checkout(setup, plan, { name: name || null, phone: session.user.phone });
+        outcome = await checkout(setup, plan, { name: session.user.name, phone: session.user.phone });
       } catch (error) {
         const code = error instanceof ApiError ? error.code : undefined;
         if (code === 'ALREADY_SUBSCRIBED') {
-          await queryClient.invalidateQueries({ queryKey: billingKey(session.user.userId) });
+          const latest = await readActive();
+          if (latest?.membership.active) {
+            markActive(latest);
+            return true;
+          }
         }
         tracker.track('payment_sheet_result', { result: 'failed', errorCode: code ?? 'setup_failed' });
         setState({ phase: 'error', message: errorMessage(code, (error as Error)?.message) });
@@ -110,43 +163,65 @@ export function useSubscribe() {
       }
 
       setState({ phase: 'activating' });
-      const deadline = Date.now() + ACTIVATION_TIMEOUT_MS;
-      let latest: Billing | null = null;
-      while (Date.now() < deadline) {
-        try {
-          latest = await fetchBilling(session.token, true);
-          queryClient.setQueryData(billingKey(session.user.userId), latest);
-          if (latest.membership.active) break;
-        } catch {
-          // keep polling until the deadline
-        }
-        await sleep(ACTIVATION_POLL_MS);
-      }
-
+      const latest = await waitForActive();
       tracker.track('payment_sheet_result', {
         result: 'completed',
         wallet: walletLabel(latest?.membership.card?.wallet),
       });
       if (latest?.membership.active) {
-        tracker.track('membership_active_seen', { status: latest.membership.status });
-        void queryClient.invalidateQueries({ queryKey: ['station-by-code'] });
-        setState({ phase: 'active' });
+        markActive(latest);
         return true;
       }
-      setState({
-        phase: 'error',
-        message: 'Payment received. Your membership is still activating; pull to refresh in a moment.',
-      });
+      setState({ phase: 'pending' });
       return false;
     },
-    [checkout, queryClient, session],
+    [checkout, markActive, readActive, session, waitForActive],
   );
 
+  /** "Check again" while pending: re-reads Stripe, never charges. */
+  const checkAgain = useCallback(async (): Promise<boolean> => {
+    const latest = await readActive();
+    if (latest?.membership.active) {
+      markActive(latest);
+      return true;
+    }
+    return false;
+  }, [markActive, readActive]);
+
   const reset = useCallback(() => setState({ phase: 'idle' }), []);
-  return { state, subscribe, reset };
+  return { state, subscribe, checkAgain, reset };
 }
 
-/** Opens the Stripe Customer Portal (update card, cancel). */
+/** In-app cancel and undo; both answer with the fresh billing view. */
+export function useCancelMembership() {
+  const session = useAuthStore((s) => s.session);
+  const queryClient = useQueryClient();
+
+  const apply = useCallback(
+    (billing: Billing) => {
+      if (session) queryClient.setQueryData(billingKey(session.user.userId), billing);
+      return billing;
+    },
+    [queryClient, session],
+  );
+
+  const cancel = useCallback(
+    async (answers: { reasons: CancelReason[]; comment: string | null }) => {
+      if (!session) throw new Error('Signed out');
+      return apply(await cancelMembership(session.token, answers));
+    },
+    [apply, session],
+  );
+
+  const resume = useCallback(async () => {
+    if (!session) throw new Error('Signed out');
+    return apply(await resumeMembership(session.token));
+  }, [apply, session]);
+
+  return { cancel, resume };
+}
+
+/** Opens the Stripe Customer Portal (update card). */
 export function useManageMembership() {
   const session = useAuthStore((s) => s.session);
   const queryClient = useQueryClient();

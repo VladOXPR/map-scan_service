@@ -1,24 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, StyleSheet, View } from 'react-native';
 import BottomSheet from '@gorhom/bottom-sheet';
-import { useRouter, type Href } from 'expo-router';
+import { useIsFocused, useRouter, type Href } from 'expo-router';
 import { StationMap } from '@/components/map/StationMap';
 import type { CameraFitRequest } from '@/components/map/StationMap';
 import { StationBottomSheet } from '@/components/sheets/StationBottomSheet';
+import { ReturnBottomSheet, type ReturnOption } from '@/components/sheets/ReturnBottomSheet';
 import { AccountModal } from '@/components/overlays/AccountModal';
 import { CreateAccountSheet } from '@/components/overlays/CreateAccountSheet';
 import { LocationPermissionSheet } from '@/components/overlays/LocationPermissionSheet';
 import { MapTopBlur } from '@/components/overlays/MapTopBlur';
+import { RentalFeedbackSheet } from '@/components/overlays/RentalFeedbackSheet';
+import { ReturnAlertsSheet } from '@/components/overlays/ReturnAlertsSheet';
 import { WelcomeOverlay } from '@/components/overlays/WelcomeOverlay';
 import {
   EnableLocationButton,
-  FindChargerBar,
   ProfileButton,
-  ScanButton,
+  RentalBar,
   SupportButton,
+  tileParam,
+  UnlockBar,
+  type TileFrame,
 } from '@/components/overlays/MapChrome';
-import { ActiveRentalCard, ACTIVE_RENTAL_CARD_SPACE } from '@/components/overlays/ActiveRentalCard';
+import { ChargingGlow } from '@/components/overlays/ChargingGlow';
 import { useActiveRental } from '@/features/rentals/hooks';
+import { usePhoneBattery } from '@/features/rentals/usePhoneBattery';
+import { useRentalFeedback } from '@/features/rentals/useRentalFeedback';
+import { useReturnAlerts } from '@/features/rentals/useReturnAlerts';
 import { EmptyState, LoadingState, Text } from '@/components/ui';
 import {
   authErrorMessage,
@@ -30,19 +38,28 @@ import { MembershipSection } from '@/features/billing/MembershipSection';
 import { isAuthFailure } from '@/lib/apiClient';
 import { useNearbyStations } from '@/features/stations/hooks';
 import { useLocationPermission } from '@/features/location/hooks';
+import { recordLocationFix } from '@/features/location/fix';
 import { tracker } from '@/lib/analytics';
 import { getSupportPhoneE164 } from '@/lib/config';
 import { useAuthStore } from '@/store/authStore';
 import { useAccountPromptStore } from '@/store/accountPromptStore';
 import { useMapStore } from '@/store/mapStore';
 import { useWelcomeStore } from '@/store/welcomeStore';
-import { distanceMiles, formatDistance } from '@/lib/distance';
+import type { WelcomeVariant } from '@/types/auth';
+import { distanceMiles } from '@/lib/distance';
+import { useWalkingMinutes } from '@/features/map/walking';
 import type { Coordinates, Station } from '@/types/station';
 import { colors, spacing } from '@/theme';
+
+/** Farther than this (about 40 minutes on foot), an open station gets no walking route or time. */
+const WALK_ROUTE_MAX_MILES = 2;
 
 export default function HomeScreen() {
   const router = useRouter();
   const sheetRef = useRef<BottomSheet>(null);
+  const returnSheetRef = useRef<BottomSheet>(null);
+  const [returnSheetIndex, setReturnSheetIndex] = useState(-1);
+  const [returnTargetId, setReturnTargetId] = useState<string | null>(null);
   const didAutoPromptRef = useRef(false);
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
@@ -57,7 +74,7 @@ export default function HomeScreen() {
   const [locationRequesting, setLocationRequesting] = useState(false);
   const [accountPromptOpen, setAccountPromptOpen] = useState(false);
   const [welcomeVisible, setWelcomeVisible] = useState(false);
-  const [welcomeVariant, setWelcomeVariant] = useState<'new' | 'back'>('new');
+  const [welcomeVariant, setWelcomeVariant] = useState<WelcomeVariant>('new');
   /** Pin highlight — cleared as soon as the sheet starts closing. */
   const [pinSelectedId, setPinSelectedId] = useState<string | null>(null);
   const [cameraFit, setCameraFit] = useState<CameraFitRequest | null>(null);
@@ -78,6 +95,12 @@ export default function HomeScreen() {
     requestPermission,
     loadCurrentPosition,
   } = useLocationPermission();
+  const focused = useIsFocused();
+  const returnAlerts = useReturnAlerts(activeRental, Boolean(session), requestPermission);
+  const [returnAlertsBusy, setReturnAlertsBusy] = useState(false);
+  const powerBankOut = Boolean(session) && activeRental?.status === 'ACTIVE';
+  const feedback = useRentalFeedback();
+  const phoneBattery = usePhoneBattery(Boolean(session && activeRental));
 
   const selectedStation = useMapStore((s) => s.selectedStation);
   const sheetIndex = useMapStore((s) => s.sheetIndex);
@@ -85,7 +108,7 @@ export default function HomeScreen() {
   const clearSelection = useMapStore((s) => s.clearSelection);
   const setSheetIndex = useMapStore((s) => s.setSheetIndex);
 
-  const sheetOpen = sheetIndex >= 0;
+  const sheetOpen = sheetIndex >= 0 || returnSheetIndex >= 0;
   const mapLoadTrackedRef = useRef(false);
 
   useEffect(() => {
@@ -108,12 +131,13 @@ export default function HomeScreen() {
     if (accountPromptOpen) tracker.track('account_prompt_shown');
   }, [accountPromptOpen]);
 
+  // Sign-up can end on the membership paywall over the map; the welcome waits until the map is in front.
   useEffect(() => {
-    if (!welcomePending) return;
+    if (!welcomePending || !focused) return;
     setWelcomeVariant(welcomePending);
     setWelcomeVisible(true);
     clearWelcome();
-  }, [welcomePending, clearWelcome]);
+  }, [welcomePending, focused, clearWelcome]);
 
   const onWelcomeFinished = useCallback(() => {
     setWelcomeVisible(false);
@@ -188,6 +212,48 @@ export default function HomeScreen() {
     )[0];
   }, [coords, stations]);
 
+  /** The two closest stations with an open slot, while a power bank is out. */
+  const returnStations = useMemo(() => {
+    if (!powerBankOut) return [];
+    const candidates = stations.filter(
+      (s) => s.locationInactive !== true && s.online !== false && (s.openSlots ?? 0) > 0,
+    );
+    if (!coords) return candidates.slice(0, 2);
+    return [...candidates]
+      .sort((a, b) => distanceMiles(coords, a) - distanceMiles(coords, b))
+      .slice(0, 2);
+  }, [coords, powerBankOut, stations]);
+  const returnWalkMinutes = useWalkingMinutes(
+    permission === 'granted' ? coords : null,
+    returnStations,
+  );
+  const returnOptions = useMemo<ReturnOption[]>(
+    () =>
+      returnStations.map((station, i) => ({
+        station,
+        miles: coords ? distanceMiles(coords, station) : null,
+        walkMinutes: returnWalkMinutes[i] ?? null,
+      })),
+    [coords, returnStations, returnWalkMinutes],
+  );
+  const returnTarget =
+    returnStations.find((s) => s.id === returnTargetId) ?? returnStations[0] ?? null;
+
+  /** A return slot while a power bank is out, otherwise a charger: the standing route leads here. */
+  const barStation = powerBankOut ? returnTarget : nearestStation;
+  /** An open station within walking distance gets the route; with none open, the standing one. */
+  const routeStation = selectedStation
+    ? coords &&
+      !selectedStation.locationInactive &&
+      distanceMiles(coords, selectedStation) <= WALK_ROUTE_MAX_MILES
+      ? selectedStation
+      : null
+    : barStation;
+  const routeTo = useMemo<Coordinates | null>(
+    () => (routeStation ? { latitude: routeStation.latitude, longitude: routeStation.longitude } : null),
+    [routeStation],
+  );
+
   /**
    * Shared open path for map taps + Nearest.
    * Sheet snap runs first so pin-press feels as instant as the button.
@@ -207,6 +273,7 @@ export default function HomeScreen() {
         { locationId: station.locationId },
       );
       // Sheet first — identical path for map MarkerView + Nearest button.
+      returnSheetRef.current?.close();
       sheetRef.current?.snapToIndex(0);
       selectStation(station);
       setPinSelectedId(station.id);
@@ -220,8 +287,8 @@ export default function HomeScreen() {
 
       cameraFitToken.current += 1;
 
-      // Same framing as the Nearest location button.
-      if (nearestStation && station.id === nearestStation.id) {
+      // Same framing as the Nearest location button for any station in walking range, so its route shows.
+      if (coords && distanceMiles(coords, station) <= WALK_ROUTE_MAX_MILES) {
         setCameraFit({
           token: cameraFitToken.current,
           from: coords,
@@ -244,7 +311,7 @@ export default function HomeScreen() {
         preserveZoom: true,
       });
     },
-    [coords, nearestStation, selectStation],
+    [coords, selectStation],
   );
 
   const onDeselect = useCallback(() => {
@@ -253,6 +320,7 @@ export default function HomeScreen() {
     setSheetIndex(-1);
     clearSelection();
     sheetRef.current?.close();
+    returnSheetRef.current?.close();
   }, [clearSelection, setSheetIndex]);
 
   const onSheetAnimate = useCallback(
@@ -279,33 +347,64 @@ export default function HomeScreen() {
     [clearSelection, setSheetIndex],
   );
 
-  const nearestDistanceLabel = useMemo(() => {
-    if (!nearestStation || !coords) return null;
-    const miles = distanceMiles(coords, {
-      latitude: nearestStation.latitude,
-      longitude: nearestStation.longitude,
-    });
-    if (miles < 0.1) return formatDistance(miles);
-    return `${miles.toFixed(1)} mi`;
-  }, [coords, nearestStation]);
-
-  const onFindNearest = () => {
-    if (!nearestStation) {
-      tracker.track('find_nearest_blocked', { reason: stations.length ? 'none_online' : 'no_stations' });
-      return;
-    }
-    tracker.track('find_nearest_tapped', { locationShared: permission === 'granted' });
-    cameraFitToken.current += 1;
-    const to: Coordinates = {
-      latitude: nearestStation.latitude,
-      longitude: nearestStation.longitude,
-    };
-    openStation(nearestStation, {
-      cameraFit: {
+  const fitReturnTarget = useCallback(
+    (station: Station | null) => {
+      if (!station) return;
+      cameraFitToken.current += 1;
+      setCameraTarget(null);
+      setCameraFit({
         token: cameraFitToken.current,
         from: coords,
-        to,
-      },
+        to: { latitude: station.latitude, longitude: station.longitude },
+      });
+    },
+    [coords],
+  );
+
+  const onOpenReturnSheet = () => {
+    void recordLocationFix('find_nearest');
+    if (returnStations.length) {
+      tracker.track('find_nearest_tapped', { target: 'return', locationShared: permission === 'granted' });
+    } else {
+      tracker.track('find_nearest_blocked', {
+        target: 'return',
+        reason: stations.length ? 'none_online' : 'no_stations',
+      });
+    }
+    const first = returnStations[0] ?? null;
+    setReturnTargetId(first?.id ?? null);
+    returnSheetRef.current?.snapToIndex(0);
+    fitReturnTarget(first);
+  };
+
+  const onSelectReturn = (station: Station) => {
+    setReturnTargetId(station.id);
+    fitReturnTarget(station);
+  };
+
+  const onReturnSheetChange = useCallback((index: number) => {
+    setReturnSheetIndex(index);
+    // A pin tap closes this sheet on its way to the station sheet; keep that station's framing.
+    if (index < 0 && !useMapStore.getState().selectedStation) setCameraFit(null);
+  }, []);
+
+  // The sheets mount closed; a selection left in the store by an earlier map would hide the chrome with nothing open.
+  useEffect(() => {
+    useMapStore.getState().clearSelection();
+  }, []);
+
+  const wasOut = useRef(powerBankOut);
+  useEffect(() => {
+    if (!powerBankOut) returnSheetRef.current?.close();
+    // A new rental lands on the map with its rental bar, not on the station it was scanned from.
+    else if (!wasOut.current) onDeselect();
+    wasOut.current = powerBankOut;
+  }, [onDeselect, powerBankOut]);
+
+  const onScanPress = (tile: TileFrame | null) => {
+    router.push({
+      pathname: '/scan',
+      params: { entry: 'map', ...(tile ? { tile: tileParam(tile) } : {}) },
     });
   };
 
@@ -373,6 +472,7 @@ export default function HomeScreen() {
   const onLogout = async () => {
     setAccountOpen(false);
     await signOut();
+    router.replace({ pathname: '/(auth)/phone', params: { entry: 'logout' } });
   };
 
   const onDeleteAccount = async () => {
@@ -412,7 +512,16 @@ export default function HomeScreen() {
     }
   };
 
-  const onPrimaryAction = (station: Station) => {
+  const onTurnOnReturnAlerts = async () => {
+    setReturnAlertsBusy(true);
+    try {
+      await returnAlerts.turnOn();
+    } finally {
+      setReturnAlertsBusy(false);
+    }
+  };
+
+  const onDirections = (station: Station) => {
     const url = `https://maps.apple.com/?daddr=${station.latitude},${station.longitude}`;
     const where = { locationId: station.locationId };
     tracker.track('directions_tapped', {}, where);
@@ -453,8 +562,6 @@ export default function HomeScreen() {
 
   const showEmptyStations = !isLoading && !isError && stations.length === 0;
   const locationShared = permission === 'granted';
-  const rentalCard = session && activeRental ? activeRental : null;
-  const controlsRaise = rentalCard ? ACTIVE_RENTAL_CARD_SPACE : 0;
   // Don't run the map intro under the welcome overlay — play it after.
   const introEnabled = !welcomeVisible && welcomePending == null;
 
@@ -470,6 +577,7 @@ export default function HomeScreen() {
         onDeselect={onDeselect}
         cameraFit={cameraFit}
         cameraTarget={cameraTarget}
+        routeTo={permission === 'granted' ? routeTo : null}
       />
 
       <MapTopBlur />
@@ -497,21 +605,13 @@ export default function HomeScreen() {
       {!sheetOpen ? (
         <>
           <ProfileButton onPress={onOpenAccount} />
-          {rentalCard ? <ActiveRentalCard rental={rentalCard} /> : null}
-          <ScanButton
-            raise={controlsRaise}
-            onPress={() => router.push({ pathname: '/scan', params: { entry: 'map' } })}
-          />
-          <EnableLocationButton
-            locationShared={locationShared}
-            onPress={onLocatePress}
-            raise={controlsRaise}
-          />
           <SupportButton onPress={onSupport} />
-          <FindChargerBar
-            onPress={onFindNearest}
-            distanceLabel={nearestDistanceLabel}
-          />
+          <EnableLocationButton locationShared={locationShared} onPress={onLocatePress} />
+          {powerBankOut && activeRental ? (
+            <RentalBar startedAt={activeRental.startedAt} onPress={onOpenReturnSheet} />
+          ) : (
+            <UnlockBar onPress={onScanPress} />
+          )}
         </>
       ) : null}
 
@@ -529,6 +629,41 @@ export default function HomeScreen() {
         }}
       />
 
+      <ReturnAlertsSheet
+        visible={
+          returnAlerts.promptVisible &&
+          focused &&
+          !sheetOpen &&
+          !welcomeVisible &&
+          !locationSheetOpen &&
+          !accountPromptOpen &&
+          !accountOpen
+        }
+        loading={returnAlertsBusy}
+        onTurnOn={() => {
+          void onTurnOnReturnAlerts();
+        }}
+        onNotNow={() => {
+          void returnAlerts.turnOff();
+        }}
+      />
+
+      <RentalFeedbackSheet
+        rental={feedback.rental}
+        visible={
+          Boolean(feedback.rental) &&
+          !activeRental &&
+          focused &&
+          !sheetOpen &&
+          !welcomeVisible &&
+          !locationSheetOpen &&
+          !accountPromptOpen &&
+          !accountOpen
+        }
+        onSubmit={feedback.submit}
+        onClose={feedback.close}
+      />
+
       <CreateAccountSheet
         visible={accountPromptOpen}
         onCreateAccount={onAccountPromptCreate}
@@ -539,11 +674,7 @@ export default function HomeScreen() {
         visible={accountOpen}
         signedIn={Boolean(session)}
         phone={session?.user.phone ?? ''}
-        name={
-          session?.user.firstName
-            ? `${session.user.firstName} ${session.user.lastName ?? ''}`.trim()
-            : null
-        }
+        name={session?.user.name ?? null}
         profileComplete={session?.user.profileComplete ?? true}
         onCompleteProfile={() => {
           setAccountOpen(false);
@@ -558,6 +689,10 @@ export default function HomeScreen() {
                   ? membershipPath({ trigger: 'account' })
                   : profileHref({ trigger: 'account', next: membershipPath({ trigger: 'account' }) })) as Href,
               );
+            }}
+            onViewHistory={() => {
+              setAccountOpen(false);
+              router.push('/history' as Href);
             }}
           />
         }
@@ -579,8 +714,27 @@ export default function HomeScreen() {
         onClose={clearSelection}
         onChangeIndex={onSheetChange}
         onAnimate={onSheetAnimate}
-        onPrimaryAction={onPrimaryAction}
+        onDirections={onDirections}
+        onScan={onScanPress}
+        rentalStartedAt={powerBankOut ? activeRental?.startedAt : null}
+        onRentalPress={() => {
+          sheetRef.current?.close();
+          onOpenReturnSheet();
+        }}
       />
+
+      <ReturnBottomSheet
+        ref={returnSheetRef}
+        rental={activeRental ?? null}
+        options={returnOptions}
+        selectedId={returnTarget?.id ?? null}
+        onSelect={onSelectReturn}
+        onDirections={onDirections}
+        onChangeIndex={onReturnSheetChange}
+        onAnimate={(_from, to) => setReturnSheetIndex(to)}
+      />
+
+      <ChargingGlow visible={powerBankOut && phoneBattery.pluggedIn} />
     </View>
   );
 }

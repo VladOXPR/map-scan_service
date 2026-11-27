@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, Pressable, StyleSheet, View } from 'react-native';
+import { Dimensions, Image, Pressable, StyleSheet, View } from 'react-native';
 import {
   Camera,
   CircleLayer,
@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Station, Coordinates } from '@/types/station';
 import { configureMapbox, getMapboxTokenStatus } from '@/lib/mapbox';
 import { fetchWalkingRoute } from '@/features/map/fetchWalkingRoute';
+import { walkingLabel, walkingMinutes } from '@/features/map/walking';
 import { lineStringToGradientSegments } from '@/features/map/routeGradient';
 import { map as mapTokens, colors } from '@/theme';
 import { stationsToGeoJSON } from '@cuub/core';
@@ -49,7 +50,7 @@ type StationMapProps = {
   showUserLocation?: boolean;
   /**
    * When false (e.g. welcome overlay), hold the home intro.
-   * Flipping to true starts the user → network zoom.
+   * Flipping to true starts the user → closest stations zoom.
    */
   introEnabled?: boolean;
   selectedStationId?: string | null;
@@ -59,7 +60,24 @@ type StationMapProps = {
   cameraZoom?: number;
   /** Fit camera with user left / station right (Nearest CUUB). */
   cameraFit?: CameraFitRequest | null;
+  /** Walking route from the user, with the walking time above the station: the open one, else the nearest. */
+  routeTo?: Coordinates | null;
 };
+
+/** Lifts the walking pill clear of the (selected, 1.2x) station pin it sits above. */
+const WALK_PILL_LIFT = 36;
+const walkIcon = require('@cuub/assets/map/walk.png');
+
+function WalkingPill({ minutes }: { minutes: number }) {
+  return (
+    <View pointerEvents="none" style={styles.walkPillWrap}>
+      <View style={styles.walkPill}>
+        <Image source={walkIcon} style={styles.walkPillIcon} />
+        <Text style={styles.walkPillText}>{walkingLabel(minutes)}</Text>
+      </View>
+    </View>
+  );
+}
 
 const PUCK_FILL = '#1F69E1';
 const PITCH_MAP = { circlePitchAlignment: 'map' as const };
@@ -152,7 +170,7 @@ function MapAlignedUserPuck({
         style={{
           ...PITCH_MAP,
           circleRadius: 11,
-          circleColor: '#000000',
+          circleColor: PUCK_FILL,
           circleStrokeColor: '#FFFFFF',
           circleStrokeWidth: 3,
         }}
@@ -161,7 +179,17 @@ function MapAlignedUserPuck({
   );
 }
 
-function boundsForUserAndNetwork(
+/** The home intro frames the user plus this many of the closest stations. */
+const INTRO_NEAREST_STATIONS = 3;
+
+/** Closest stations to the user, ones that can rent right now first (as Nearest picks). */
+function nearestStations(user: Coordinates, stations: Station[], count: number): Station[] {
+  const byDistance = [...stations].sort((a, b) => distanceMeters(user, a) - distanceMeters(user, b));
+  const usable = (s: Station) => s.locationInactive !== true && s.online !== false;
+  return [...byDistance.filter(usable), ...byDistance.filter((s) => !usable(s))].slice(0, count);
+}
+
+function boundsForUserAndStations(
   userCoords: Coordinates | null,
   stations: Station[],
 ): { ne: [number, number]; sw: [number, number] } | null {
@@ -200,7 +228,7 @@ function boundsForUserAndNetwork(
   };
 }
 
-function networkOverviewPadding(insetTop: number) {
+function introPadding(insetTop: number) {
   const { width: screenW, height: screenH } = Dimensions.get('window');
   return {
     paddingTop: Math.max(insetTop, 12) + 72,
@@ -285,12 +313,13 @@ export function StationMap({
   cameraTarget,
   cameraZoom,
   cameraFit,
+  routeTo,
 }: StationMapProps) {
   const cameraRef = useRef<Camera>(null);
   const shapeRef = useRef<ShapeSource>(null);
   const handledPressRef = useRef(false);
   const hitTargetsEnabledRef = useRef(false);
-  /** One-shot home intro: user-centered → network overview. */
+  /** One-shot home intro: user-centered → user + closest stations. */
   const introPlayedRef = useRef(false);
   /** True after the initial center-on-user frame (zoom-out may still be pending). */
   const introCenteredRef = useRef(false);
@@ -301,15 +330,13 @@ export function StationMap({
   });
   const insets = useSafeAreaInsets();
   const tokenStatus = getMapboxTokenStatus();
-  const [routeLine, setRouteLine] =
-    useState<GeoJSON.Feature<GeoJSON.LineString> | null>(null);
+  /** Keyed by route so a line (and its walking time) never shows at a station it wasn't fetched for. */
+  const [fetchedRoute, setFetchedRoute] = useState<{
+    key: string;
+    feature: GeoJSON.Feature<GeoJSON.LineString>;
+  } | null>(null);
   const [hitTargetsEnabled, setHitTargetsEnabled] = useState(false);
   const [livePuck, setLivePuck] = useState<[number, number] | null>(null);
-
-  const routeGradient = useMemo(
-    () => (routeLine ? lineStringToGradientSegments(routeLine) : null),
-    [routeLine],
-  );
 
   const geojson = useMemo(
     () => stationsToGeoJSON(stations, selectedStationId ?? null),
@@ -326,26 +353,41 @@ export function StationMap({
     introCenteredRef.current = true;
   }, [selectedStationId]);
 
+  const route = routeTo && userCoords ? { from: userCoords, to: routeTo } : null;
+  // Rounded to ~10 m so small location updates don't refetch the same route.
+  const routeKey = route
+    ? [route.from.latitude, route.from.longitude, route.to.latitude, route.to.longitude]
+        .map((n) => n.toFixed(4))
+        .join(',')
+    : null;
+  const routeRef = useRef(route);
+  routeRef.current = route;
+
   useEffect(() => {
-    if (!cameraFit?.from) {
-      setRouteLine(null);
+    const request = routeRef.current;
+    if (!request || !routeKey) {
+      setFetchedRoute(null);
       return;
     }
 
     let cancelled = false;
-    const from = cameraFit.from;
-    const to = cameraFit.to;
-
     void (async () => {
-      const feature = await fetchWalkingRoute(from, to);
+      const feature = await fetchWalkingRoute(request.from, request.to);
       if (cancelled) return;
-      setRouteLine(feature);
+      setFetchedRoute({ key: routeKey, feature });
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [cameraFit]);
+  }, [routeKey]);
+
+  const routeLine = fetchedRoute && fetchedRoute.key === routeKey ? fetchedRoute.feature : null;
+  const routeGradient = useMemo(
+    () => (routeLine ? lineStringToGradientSegments(routeLine) : null),
+    [routeLine],
+  );
+  const walkMinutes = routeLine && route ? walkingMinutes(routeLine, route.from, route.to) : null;
 
   useEffect(() => {
     if (!cameraFit) return;
@@ -448,7 +490,7 @@ export function StationMap({
 
   /**
    * Home load: frame the puck first, then after 1s fly out so the user +
-   * whole station network fit the viewport.
+   * the closest stations fit the viewport.
    * Waits for `introEnabled` so login welcome doesn't hide the animation.
    * Zoom-out is only marked complete when it fires — so a stations refetch
    * mid-timer can reschedule instead of skipping the fly-out forever.
@@ -459,7 +501,7 @@ export function StationMap({
     if (!userCoords || !stations.length) return;
     if (cameraFit) return;
 
-    const padding = networkOverviewPadding(insets.top);
+    const padding = introPadding(insets.top);
 
     if (!introCenteredRef.current) {
       introCenteredRef.current = true;
@@ -474,7 +516,10 @@ export function StationMap({
     }
 
     const timer = setTimeout(() => {
-      const bounds = boundsForUserAndNetwork(userCoords, stations);
+      const bounds = boundsForUserAndStations(
+        userCoords,
+        nearestStations(userCoords, stations, INTRO_NEAREST_STATIONS),
+      );
       if (!bounds) return;
 
       introPlayedRef.current = true;
@@ -652,7 +697,7 @@ export function StationMap({
         ref={cameraRef}
         defaultSettings={{
           centerCoordinate: defaultCenter,
-          // Start close on the puck; intro effect flies out to the network.
+          // Start close on the puck; intro effect flies out to the closest stations.
           zoomLevel: userCoords
             ? mapTokens.stationZoom
             : mapTokens.defaultZoom,
@@ -804,6 +849,17 @@ export function StationMap({
 
       {/* RN press targets — same touch path as the Nearest button (not Mapbox hit-test). */}
       {stationHitTargets}
+
+      {route && walkMinutes != null ? (
+        <MarkerView
+          coordinate={[route.to.longitude, route.to.latitude]}
+          anchor={{ x: 0.5, y: 1 }}
+          allowOverlap
+          allowOverlapWithPuck
+        >
+          <WalkingPill minutes={walkMinutes} />
+        </MarkerView>
+      ) : null}
     </MapView>
   );
 }
@@ -823,5 +879,35 @@ const styles = StyleSheet.create({
   stationHit: {
     width: 48,
     height: 48,
+  },
+  walkPillWrap: {
+    paddingBottom: WALK_PILL_LIFT,
+  },
+  walkPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#BBBBBB',
+    borderWidth: 1,
+    borderColor: '#DADADA',
+    borderRadius: 999,
+    paddingLeft: 8,
+    paddingRight: 10,
+    paddingVertical: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  walkPillText: {
+    color: '#000000',
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+  walkPillIcon: {
+    width: 16,
+    height: 16,
+    tintColor: '#000000',
   },
 });

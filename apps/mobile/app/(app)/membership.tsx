@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -14,24 +14,48 @@ import { unlockGate } from '@/features/auth/gate';
 import { membershipPath, stationPath, type PaywallTrigger } from '@/features/auth/routes';
 import { formatMoney, type Billing } from '@/features/billing/api';
 import { useBilling, useManageMembership, useSubscribe } from '@/features/billing/hooks';
+import { PassActivated } from '@/features/billing/PassActivated';
 import { paymentsSupported } from '@/features/billing/stripe';
 import { tracker } from '@/lib/analytics';
 import { useAuthStore } from '@/store/authStore';
-import { colors, radius, rentTypeColors, spacing } from '@/theme';
+import { colors, radius, spacing } from '@/theme';
 
 function isTrigger(value: unknown): value is PaywallTrigger {
-  return value === 'unlock' || value === 'account' || value === 'station';
+  return value === 'unlock' || value === 'account' || value === 'station' || value === 'signup';
 }
 
-function hoursLabel(hours: number): string {
-  return hours === 1 ? '1 hour' : `${hours} hours`;
-}
+const STEP_TILE = 32;
 
-function Benefit({ children }: { children: string }) {
+const STEPS = [
+  { title: 'Unlimited Access', body: 'Unlock through the app.' },
+  { title: 'One at a time', body: 'Return then grab another one' },
+  { title: 'Total Freedom', body: 'Take anywhere, go anywhere' },
+] as const;
+
+function Steps() {
   return (
-    <View style={styles.benefit}>
-      <View style={styles.benefitDot} />
-      <Text style={{ flex: 1 }}>{children}</Text>
+    <View style={styles.card}>
+      {STEPS.map((step, i) => {
+        const last = i === STEPS.length - 1;
+        return (
+          <View key={step.title} style={styles.step}>
+            <View style={styles.stepRail}>
+              <View style={styles.stepTile}>
+                <Text style={styles.stepNumber}>{i + 1}</Text>
+              </View>
+              {last ? null : <View style={styles.stepConnector} />}
+            </View>
+            <View style={[styles.stepText, !last && { paddingBottom: spacing[4] }]}>
+              <View style={styles.stepTitleRow}>
+                <Text variant="subtitle" style={{ fontWeight: '700' }}>
+                  {step.title}
+                </Text>
+              </View>
+              <Text muted>{step.body}</Text>
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -44,7 +68,7 @@ export default function MembershipScreen() {
   const stationCode = typeof params.station === 'string' ? params.station : undefined;
   const session = useAuthStore((s) => s.session);
   const billing = useBilling();
-  const { state, subscribe, reset } = useSubscribe();
+  const { state, subscribe, checkAgain: recheck, reset } = useSubscribe();
   const manage = useManageMembership();
   const viewed = useRef(false);
 
@@ -66,18 +90,28 @@ export default function MembershipScreen() {
     else router.replace(fallback as Href);
   }, [fallback, router]);
 
-  useEffect(() => {
-    if (state.phase !== 'active') return;
-    const timer = setTimeout(close, 900);
-    return () => clearTimeout(timer);
-  }, [close, state.phase]);
+  // A new member goes on to scan; one who came from a station goes back to unlock it there.
+  const startUnlocking = useCallback(() => {
+    if (stationCode) close();
+    else router.replace({ pathname: '/scan', params: { entry: 'membership' } });
+  }, [close, router, stationCode]);
+
+  const [checking, setChecking] = useState(false);
+  const checkAgain = useCallback(async () => {
+    setChecking(true);
+    try {
+      await recheck();
+    } finally {
+      setChecking(false);
+    }
+  }, [recheck]);
 
   if (gate.step !== 'ready' || billing.isPending) return <LoadingState />;
 
   if (billing.isError || !billing.data) {
     return (
       <EmptyState
-        title="Couldn't load memberships"
+        title="Couldn't load CUUB Pass"
         description="Check your connection and try again."
         actionLabel="Try again"
         onAction={() => void billing.refetch()}
@@ -86,8 +120,63 @@ export default function MembershipScreen() {
   }
 
   const data: Billing = billing.data;
-  const { membership, plan, unpaidBuyout } = data;
+  const { membership, plan } = data;
   const busy = state.phase === 'preparing' || state.phase === 'paying' || state.phase === 'activating';
+  const celebrate = membership.active && (state.phase === 'active' || state.phase === 'pending');
+  const pending = state.phase === 'pending' && !membership.active;
+
+  if (celebrate) {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, spacing[5]) }]}
+        >
+          <PassActivated
+            membership={membership}
+            primaryLabel={stationCode ? 'Unlock at this station' : 'Unlock a power bank'}
+            onPrimary={startUnlocking}
+            onDone={close}
+          />
+        </ScrollView>
+      </View>
+    );
+  }
+
+  if (pending) {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          onPress={close}
+          style={[styles.closeButton, { top: insets.top + spacing[2] }]}
+          hitSlop={8}
+        >
+          <Text style={styles.closeIcon}>×</Text>
+        </Pressable>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, spacing[5]) }]}
+          refreshControl={
+            <RefreshControl tintColor={colors.muted} refreshing={checking} onRefresh={() => void checkAgain()} />
+          }
+        >
+          <MembershipChip label="Pass" />
+          <View style={{ gap: spacing[3] }}>
+            <Text style={styles.headline}>Payment received</Text>
+            <Text muted>
+              We're confirming your Pass with Stripe. This usually takes a few seconds, and it will show here the moment
+              it's active. You won't be charged again.
+            </Text>
+          </View>
+          <View style={styles.pendingRow}>
+            <ActivityIndicator color={colors.muted} />
+            <Text muted>Activating your Pass…</Text>
+          </View>
+          <GradientButton label="Check again" loading={checking} onPress={() => void checkAgain()} />
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -115,59 +204,29 @@ export default function MembershipScreen() {
           />
         }
       >
-        <MembershipChip label="CUUB Membership" />
+        <MembershipChip label="Pass" />
 
         {membership.active ? (
           <View style={{ gap: spacing[3] }}>
-            <Text style={styles.headline}>You're a member</Text>
+            <Text style={styles.headline}>You have a Pass</Text>
             <Text muted>
               {membership.cancelAtPeriodEnd && membership.currentPeriodEnd
-                ? `Your membership ends on ${new Date(membership.currentPeriodEnd).toLocaleDateString()}.`
+                ? `Your Pass ends on ${new Date(membership.currentPeriodEnd).toLocaleDateString()}.`
                 : 'Unlock a power bank at any CUUB station at no extra charge.'}
             </Text>
           </View>
         ) : plan ? (
           <View style={{ gap: spacing[3] }}>
-            <Text style={styles.headline}>
-              {trigger === 'unlock' ? 'Become a member to unlock' : 'Charge anywhere, anytime'}
-            </Text>
-            <View style={styles.priceRow}>
-              <Text style={styles.price}>{formatMoney(plan.amountCents, plan.currency)}</Text>
-              <Text muted style={{ marginBottom: 6 }}>
-                / {plan.interval}
-              </Text>
-            </View>
+            <Text style={styles.headline}>Charge anywhere, anytime</Text>
           </View>
         ) : (
           <View style={{ gap: spacing[3] }}>
-            <Text style={styles.headline}>Memberships are coming soon</Text>
+            <Text style={styles.headline}>CUUB Pass is coming soon</Text>
             <Text muted>Check back shortly.</Text>
           </View>
         )}
 
-        {plan && !membership.active ? (
-          <View style={styles.card}>
-            <Benefit>Unlimited power bank rentals</Benefit>
-            <Benefit>{`Keep each one up to ${hoursLabel(plan.maxRentHours)}`}</Benefit>
-            <Benefit>Return to any CUUB station</Benefit>
-            <Benefit>Cancel anytime</Benefit>
-          </View>
-        ) : null}
-
-        {unpaidBuyout ? (
-          <View style={[styles.card, styles.warning]}>
-            <Text variant="subtitle">Payment needed</Text>
-            <Text muted>
-              {`We couldn't charge the ${formatMoney(unpaidBuyout.amountCents)} buyout for a battery that wasn't returned. Update your card to keep unlocking.`}
-            </Text>
-            <Button
-              label="Update card"
-              variant="secondary"
-              loading={manage.opening}
-              onPress={() => void manage.open()}
-            />
-          </View>
-        ) : null}
+        {plan && !membership.active ? <Steps /> : null}
 
         {state.phase === 'error' ? (
           <Text variant="caption" color={colors.danger}>
@@ -177,14 +236,9 @@ export default function MembershipScreen() {
 
         {membership.active ? (
           <View style={{ gap: spacing[3] }}>
-            {state.phase === 'active' ? (
-              <Text variant="subtitle" color={colors.success}>
-                Membership active
-              </Text>
-            ) : null}
             <GradientButton label={stationCode ? 'Back to station' : 'Done'} onPress={close} />
             <Button
-              label="Manage membership"
+              label="Manage Pass"
               variant="ghost"
               loading={manage.opening}
               onPress={() => void manage.open()}
@@ -194,7 +248,11 @@ export default function MembershipScreen() {
           <View style={{ gap: spacing[3] }}>
             {paymentsSupported ? (
               <GradientButton
-                label={state.phase === 'error' ? 'Try again' : 'Continue'}
+                label={
+                  state.phase === 'error'
+                    ? 'Try again'
+                    : `${formatMoney(plan.amountCents, plan.currency, { showCents: true })} / ${plan.interval}`
+                }
                 loading={busy}
                 onPress={() => {
                   if (state.phase === 'error') reset();
@@ -206,13 +264,13 @@ export default function MembershipScreen() {
             )}
             {state.phase === 'activating' ? (
               <Text variant="caption" muted center>
-                Activating your membership…
+                Payment received. Activating your Pass…
               </Text>
             ) : null}
             <Text variant="caption" muted>
               {`Renews every ${plan.interval} at ${formatMoney(plan.amountCents, plan.currency)} until you cancel. ` +
-                `If a power bank isn't returned within ${hoursLabel(plan.maxRentHours)}, ` +
-                `we charge a ${formatMoney(plan.buyoutCents, plan.currency)} buyout to your card on file and you keep it.`}
+                'Return your power bank within a month to rent the next one. ' +
+                `If it isn't back by then, the ${formatMoney(plan.buyoutCents, plan.currency)} lost power bank fee is charged to your card.`}
             </Text>
           </View>
         ) : null}
@@ -257,37 +315,51 @@ const styles = StyleSheet.create({
     lineHeight: 34,
     fontWeight: '700',
   },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing[2],
-  },
-  price: {
-    color: colors.white,
-    fontSize: 44,
-    lineHeight: 50,
-    fontWeight: '800',
-  },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing[5],
+  },
+  step: {
+    flexDirection: 'row',
     gap: spacing[3],
   },
-  warning: {
-    borderColor: colors.danger,
+  stepRail: {
+    width: STEP_TILE,
+    alignItems: 'center',
   },
-  benefit: {
+  stepTile: {
+    width: STEP_TILE,
+    height: STEP_TILE,
+    borderRadius: 10,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepNumber: {
+    color: '#4A5257',
+    fontSize: 17,
+    lineHeight: 20,
+    fontWeight: '800',
+  },
+  pendingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
   },
-  benefitDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: rentTypeColors.subscription,
+  stepConnector: {
+    flex: 1,
+    width: 4,
+    marginVertical: 3,
+    backgroundColor: colors.white,
+  },
+  stepText: {
+    flex: 1,
+  },
+  stepTitleRow: {
+    minHeight: STEP_TILE,
+    justifyContent: 'center',
   },
 });

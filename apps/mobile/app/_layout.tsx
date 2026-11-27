@@ -2,6 +2,7 @@ import '../global.css';
 
 // Must load so TaskManager.defineTask runs in global scope.
 import '@/features/alerts/backgroundLowBatteryTask';
+import '@/features/rentals/returnAlerts';
 
 import { useEffect } from 'react';
 import { View } from 'react-native';
@@ -14,6 +15,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { EmptyState } from '@/components/ui';
 import { useAnalyticsLifecycle } from '@/features/analytics/useAnalyticsLifecycle';
 import { BillingProvider } from '@/features/billing/stripe';
+import { useLaunchUpdate, useUpdateChecks } from '@/features/updates/useUpdateChecks';
 import { tracker } from '@/lib/analytics';
 import { useAuthStore } from '@/store/authStore';
 import { useLocationStore } from '@/store/locationStore';
@@ -53,6 +55,8 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 
 export default function RootLayout() {
   useAnalyticsLifecycle();
+  useUpdateChecks();
+  const launchReady = useLaunchUpdate();
   const hydrateAuth = useAuthStore((s) => s.hydrate);
   const hydrateLocation = useLocationStore((s) => s.hydrate);
   const hydrateAccountPrompt = useAccountPromptStore((s) => s.hydrate);
@@ -67,10 +71,10 @@ export default function RootLayout() {
   }, [hydrateAuth, hydrateLocation, hydrateAccountPrompt]);
 
   useEffect(() => {
-    if (authHydrated && locationHydrated) {
+    if (launchReady && authHydrated && locationHydrated) {
       SplashScreen.hideAsync().catch(() => undefined);
     }
-  }, [authHydrated, locationHydrated]);
+  }, [launchReady, authHydrated, locationHydrated]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>

@@ -64,9 +64,8 @@ export function toAppUser(data: Partial<AppUser> & { userId: string; phone: stri
     userId: data.userId,
     phone: data.phone,
     notifsEnabled: Boolean(data.notifsEnabled),
-    firstName: data.firstName ?? null,
-    lastName: data.lastName ?? null,
-    dateOfBirth: data.dateOfBirth ?? null,
+    name: data.name ?? null,
+    age: data.age ?? null,
     profileComplete: Boolean(data.profileComplete),
   };
 }
@@ -126,10 +125,8 @@ export async function fetchCurrentUser(token: string): Promise<AppUser> {
 }
 
 export type ProfileInput = {
-  firstName: string;
-  lastName: string;
-  /** YYYY-MM-DD. */
-  dateOfBirth: string;
+  name: string;
+  age: number;
 };
 
 /** Registration step after OTP; the server refuses anyone under 13 (code UNDER_MINIMUM_AGE). */
@@ -142,7 +139,7 @@ export async function updateProfile(token: string, input: ProfileInput): Promise
 export function profileErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === 'UNDER_MINIMUM_AGE') return 'You must be at least 13 to use CUUB.';
-    if (error.code === 'INVALID_DATE_OF_BIRTH') return 'Check your date of birth.';
+    if (error.code === 'INVALID_AGE') return 'Enter your age in years.';
     if (error.code === 'INVALID_NAME') return error.message || 'Check your name.';
   }
   return authErrorMessage(error, 'Couldn’t save your profile. Try again.');

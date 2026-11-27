@@ -22,6 +22,7 @@ type StationMapProps = {
   cameraTarget?: Coordinates | null;
   cameraZoom?: number;
   cameraFit?: CameraFitRequest | null;
+  routeTo?: Coordinates | null;
 };
 
 /** Web preview: Mapbox native maps are unavailable in the browser. */

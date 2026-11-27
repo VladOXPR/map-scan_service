@@ -7,7 +7,8 @@ import BottomSheet, {
 import { Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GradientButton } from '@/components/ui/GradientButton';
-import { Text } from '@/components/ui';
+import { Button, Text } from '@/components/ui';
+import { RentalClockButton, ScanButton, type TileFrame } from '@/components/overlays/MapChrome';
 import { formatDistance, distanceMiles } from '@/lib/distance';
 import type { Coordinates, Station } from '@/types/station';
 import { colors, radius, spacing } from '@/theme';
@@ -20,14 +21,28 @@ type StationBottomSheetProps = {
   station: Station | null;
   userCoords: Coordinates | null;
   onClose: () => void;
-  onPrimaryAction: (station: Station) => void;
+  onDirections: (station: Station) => void;
+  onScan: (tile: TileFrame | null) => void;
+  /** Set while a power bank is out: the rental time replaces Scan. */
+  rentalStartedAt?: string | null;
+  onRentalPress?: () => void;
   onChangeIndex?: (index: number) => void;
   onAnimate?: (fromIndex: number, toIndex: number) => void;
 };
 
 export const StationBottomSheet = forwardRef<BottomSheet, StationBottomSheetProps>(
   function StationBottomSheet(
-    { station, userCoords, onClose, onPrimaryAction, onChangeIndex, onAnimate },
+    {
+      station,
+      userCoords,
+      onClose,
+      onDirections,
+      onScan,
+      rentalStartedAt,
+      onRentalPress,
+      onChangeIndex,
+      onAnimate,
+    },
     ref,
   ) {
     const insets = useSafeAreaInsets();
@@ -143,11 +158,28 @@ export const StationBottomSheet = forwardRef<BottomSheet, StationBottomSheetProp
                 />
               </View>
 
-              <GradientButton
-                label={isUnavailable ? 'Location Inactive' : 'Get Directions'}
-                disabled={isUnavailable}
-                onPress={() => onPrimaryAction(station)}
-              />
+              {isUnavailable ? (
+                <GradientButton label="Location Inactive" disabled onPress={() => {}} />
+              ) : (
+                <View style={styles.actions}>
+                  <View style={styles.action}>
+                    <Button
+                      label="Directions"
+                      variant="neutral"
+                      onPress={() => onDirections(station)}
+                      style={styles.directions}
+                      labelStyle={styles.directionsLabel}
+                    />
+                  </View>
+                  <View style={styles.action}>
+                    {rentalStartedAt && onRentalPress ? (
+                      <RentalClockButton startedAt={rentalStartedAt} onPress={onRentalPress} />
+                    ) : (
+                      <ScanButton label="Scan" onPress={onScan} />
+                    )}
+                  </View>
+                </View>
+              )}
             </View>
           ) : (
             <View style={styles.empty}>
@@ -290,5 +322,23 @@ const styles = StyleSheet.create({
   },
   empty: {
     paddingVertical: spacing[6],
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing[3],
+  },
+  /** Equal halves whatever the labels: each button fills its own half. */
+  action: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+  },
+  directions: {
+    // Same outer size and corners as the gradient Scan button (56 + its 2pt border).
+    minHeight: 60,
+    borderRadius: radius.button + 4,
+  },
+  directionsLabel: {
+    fontWeight: '800',
   },
 });

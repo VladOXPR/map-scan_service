@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MembershipChip, Text } from '@/components/ui';
+import { BatteryIcon, Text } from '@/components/ui';
 import type { AppRental } from '@/features/rentals/api';
+import type { PhoneBattery } from '@/features/rentals/usePhoneBattery';
 import { tracker } from '@/lib/analytics';
-import { colors, radius, rentTypeColors, spacing } from '@/theme';
-import { nearestBarHeight } from './MapChrome';
+import { colors, radius, spacing } from '@/theme';
 
-/** Card height plus its gap; map controls lift by this much while it shows. */
-export const ACTIVE_RENTAL_CARD_SPACE = 88 + spacing[3];
+const BANNER_HEIGHT = 46;
 
-const SOON_MS = 30 * 60_000;
+/** Banner height plus its gap; the Profile / Support row drops by this much while it shows. */
+export const RENTAL_BANNER_SPACE = BANNER_HEIGHT + spacing[3];
+
 const tracked = new Set<string>();
 
 function durationLabel(ms: number): string {
@@ -18,6 +19,15 @@ function durationLabel(ms: number): string {
   const hours = Math.floor(minutes / 60);
   if (hours === 0) return `${minutes}m`;
   return `${hours}h ${String(minutes % 60).padStart(2, '0')}m`;
+}
+
+/** Stopwatch time: 4:05, then 1:04:05 past the hour. */
+function counterLabel(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, '0');
+  return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${seconds}` : `${minutes}:${seconds}`;
 }
 
 function useNow(intervalMs: number): number {
@@ -29,11 +39,17 @@ function useNow(intervalMs: number): number {
   return now;
 }
 
-/** The person's open rental, pinned above the bottom bar on the map. */
-export function ActiveRentalCard({ rental, onPress }: { rental: AppRental; onPress?: () => void }) {
+type ActiveRentalCardProps = {
+  rental: AppRental;
+  battery: PhoneBattery;
+  /** Opens return-alert settings; the banner isn't pressable without it. */
+  onPress?: () => void;
+};
+
+/** The person's open rental, pinned at the very top of the map. */
+export function ActiveRentalCard({ rental, battery, onPress }: ActiveRentalCardProps) {
   const insets = useSafeAreaInsets();
-  const now = useNow(30_000);
-  const subscription = rental.rentType === 'SUBSCRIPTION';
+  const now = useNow(1_000);
   const releasing = rental.status === 'PENDING_UNLOCK';
 
   useEffect(() => {
@@ -43,59 +59,25 @@ export function ActiveRentalCard({ rental, onPress }: { rental: AppRental; onPre
   }, [rental.rentalId, rental.rentType]);
 
   const elapsed = now - new Date(rental.startedAt).getTime();
-  const returnBy = rental.returnBy ? new Date(rental.returnBy) : null;
-  const remaining = returnBy ? returnBy.getTime() - now : null;
-  const returnLine = returnBy
-    ? remaining !== null && remaining <= 0
-      ? 'Return window ended'
-      : `Return by ${returnBy.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
-    : 'Return to any CUUB station';
-  const returnColor =
-    remaining !== null && remaining <= SOON_MS ? colors.danger : colors.muted;
+  const batteryLabel =
+    battery.level == null
+      ? ''
+      : `. Phone battery ${Math.round(battery.level * 100)}%${battery.pluggedIn ? ', charging' : ''}`;
 
   return (
-    <View
-      pointerEvents="box-none"
-      style={[styles.wrap, { bottom: nearestBarHeight(insets.bottom) + spacing[3] }]}
-    >
+    <View pointerEvents="box-none" style={[styles.wrap, { top: insets.top + spacing[2] }]}>
       <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={releasing ? 'Releasing your power bank' : `Power bank out for ${durationLabel(elapsed)}`}
+        accessibilityRole={onPress ? 'button' : undefined}
+        accessibilityLabel={`${releasing ? 'Releasing your power bank' : `Power bank out for ${durationLabel(elapsed)}`}${batteryLabel}`}
+        accessibilityHint={onPress ? 'Manage return alerts' : undefined}
+        disabled={!onPress}
         onPress={onPress}
-        style={[styles.card, subscription && { borderColor: rentTypeColors.subscription }]}
+        style={styles.banner}
       >
-        <View
-          style={[
-            styles.accent,
-            { backgroundColor: subscription ? rentTypeColors.subscription : rentTypeColors.payPerUse },
-          ]}
-        />
-        <View style={styles.body}>
-          <View style={styles.row}>
-            <Text variant="subtitle">{releasing ? 'Releasing…' : 'Power bank out'}</Text>
-            {subscription ? (
-              <MembershipChip />
-            ) : (
-              <View style={styles.neutralChip}>
-                <Text variant="caption" style={{ fontWeight: '700' }}>
-                  Pay per use
-                </Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.row}>
-            <Text variant="caption" muted>
-              {releasing
-                ? rental.startTitle ?? 'Take it from the station'
-                : `Out ${durationLabel(elapsed)}${rental.startTitle ? ` · ${rental.startTitle}` : ''}`}
-            </Text>
-            {!releasing ? (
-              <Text variant="caption" color={returnColor}>
-                {returnLine}
-              </Text>
-            ) : null}
-          </View>
-        </View>
+        <BatteryIcon level={battery.level} />
+        <Text variant="subtitle" style={styles.duration}>
+          {releasing ? 'Releasing…' : counterLabel(elapsed)}
+        </Text>
       </Pressable>
     </View>
   );
@@ -108,34 +90,19 @@ const styles = StyleSheet.create({
     right: spacing[5],
     zIndex: 21,
   },
-  card: {
-    height: 88,
-    flexDirection: 'row',
-    backgroundColor: '#161616',
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  accent: {
-    width: 5,
-  },
-  body: {
-    flex: 1,
-    paddingHorizontal: spacing[4],
-    justifyContent: 'center',
-    gap: spacing[2],
-  },
-  row: {
+  banner: {
+    height: BANNER_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing[2],
-  },
-  neutralChip: {
+    paddingHorizontal: spacing[4],
+    backgroundColor: '#161616',
     borderRadius: radius.pill,
-    paddingHorizontal: spacing[3],
-    paddingVertical: 3,
-    backgroundColor: colors.elevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  duration: {
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
 });

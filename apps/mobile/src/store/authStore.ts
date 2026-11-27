@@ -29,11 +29,22 @@ function isSessionShape(value: unknown): value is AuthSession {
   );
 }
 
+/** The saved session's token, for background tasks that can run before the store hydrates. */
+export async function readStoredToken(): Promise<string | null> {
+  try {
+    const raw = await getSecureItem(AUTH_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return isSessionShape(parsed) ? parsed.token : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Links analytics to the signed-in person; runs on every launch with a valid session. */
 function identify(session: AuthSession): void {
   setAnalyticsToken(session.token);
   void tracker.identify(session.user.userId, {
-    ageBracket: ageBracket(session.user.dateOfBirth),
+    ageBracket: ageBracket(session.user.age),
   });
 }
 
@@ -87,7 +98,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const session: AuthSession = { token: current.token, user };
     await setSecureItem(AUTH_KEY, JSON.stringify(session));
     set({ session });
-    tracker.updatePerson({ ageBracket: ageBracket(user.dateOfBirth) });
+    tracker.updatePerson({ ageBracket: ageBracket(user.age) });
   },
   signOut: async (options = {}) => {
     const current = get().session;

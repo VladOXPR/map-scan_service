@@ -5,12 +5,18 @@ import { ApiError, defaultUUID } from '@cuub/core';
 import { tracker } from '@/lib/analytics';
 import { useAuthStore } from '@/store/authStore';
 import { billingKey } from '@/features/billing/hooks';
+import { useLostPowerBankCheckout } from '@/features/billing/stripe';
+import { recordLocationFix } from '@/features/location/fix';
+import { feedbackDueKey } from './useRentalFeedback';
 import {
+  checkoutBuyout,
   fetchActiveRental,
   fetchRental,
+  fetchRentals,
   fetchStationByCode,
   requestUnlock,
   type AppRental,
+  type BuyoutCheckout,
   type StationByCode,
 } from './api';
 
@@ -34,6 +40,19 @@ export function useStationByCode(code: string | null) {
   });
 }
 
+export function rentalHistoryKey(userId: string | undefined) {
+  return ['rental-history', userId ?? 'signed-out'] as const;
+}
+
+export function useRentalHistory() {
+  const session = useAuthStore((s) => s.session);
+  return useQuery({
+    queryKey: rentalHistoryKey(session?.user.userId),
+    queryFn: () => fetchRentals(session!.token),
+    enabled: Boolean(session?.token),
+  });
+}
+
 function minutesBetween(from: string, to: string | null): number | undefined {
   if (!to) return undefined;
   const ms = new Date(to).getTime() - new Date(from).getTime();
@@ -42,7 +61,8 @@ function minutesBetween(from: string, to: string | null): number | undefined {
 
 /**
  * The signed-in person's open rental (map card). Polls quickly while the
- * cabinet is releasing, slowly while out, and notices the return.
+ * cabinet is releasing and every few seconds while out, so the return shows
+ * up even without the rental push (see `usePushNavigation`).
  */
 export function useActiveRental() {
   const session = useAuthStore((s) => s.session);
@@ -54,7 +74,7 @@ export function useActiveRental() {
     refetchInterval: (q) => {
       const rental = q.state.data;
       if (!rental) return 120_000;
-      return rental.status === 'PENDING_UNLOCK' ? 3_000 : 30_000;
+      return rental.status === 'PENDING_UNLOCK' ? 3_000 : 5_000;
     },
   });
 
@@ -73,6 +93,8 @@ export function useActiveRental() {
     previous.current = current;
     if (!session || !before || before.status !== 'ACTIVE') return;
     if (current && current.rentalId === before.rentalId) return;
+    void queryClient.invalidateQueries({ queryKey: feedbackDueKey(session.user.userId) });
+    void queryClient.invalidateQueries({ queryKey: billingKey(session.user.userId) });
     void (async () => {
       try {
         const final = await fetchRental(session.token, before.rentalId);
@@ -85,7 +107,6 @@ export function useActiveRental() {
       } catch {
         // The card already disappeared; the server has the return either way.
       }
-      void queryClient.invalidateQueries({ queryKey: billingKey(session.user.userId) });
     })();
   }, [current, queryClient, session]);
 
@@ -115,8 +136,9 @@ function sleep(ms: number) {
 /**
  * One unlock attempt: POST /app/rentals (retry-safe on clientEventId), then
  * poll the rental until the cabinet reports the power bank out or fails.
+ * `unlock(code)` targets another station than `defaultCode` (the scanner).
  */
-export function useUnlock(stationCode: string) {
+export function useUnlock(defaultCode?: string) {
   const session = useAuthStore((s) => s.session);
   const queryClient = useQueryClient();
   const [state, setState] = useState<UnlockState>({ phase: 'idle' });
@@ -129,15 +151,21 @@ export function useUnlock(stationCode: string) {
     [],
   );
 
-  const refreshAfter = useCallback(() => {
-    if (!session) return;
-    void queryClient.invalidateQueries({ queryKey: activeRentalKey(session.user.userId) });
-    void queryClient.invalidateQueries({ queryKey: ['station-by-code', stationCode] });
-  }, [queryClient, session, stationCode]);
+  const refreshAfter = useCallback(
+    (stationCode: string) => {
+      if (!session) return;
+      void queryClient.invalidateQueries({ queryKey: activeRentalKey(session.user.userId) });
+      void queryClient.invalidateQueries({ queryKey: rentalHistoryKey(session.user.userId) });
+      void queryClient.invalidateQueries({ queryKey: ['station-by-code', stationCode] });
+    },
+    [queryClient, session],
+  );
 
-  const unlock = useCallback(async () => {
-    if (!session) return;
+  const unlock = useCallback(async (code: string | undefined = defaultCode) => {
+    if (!session || !code) return;
+    const stationCode = code;
     tracker.track('unlock_tapped', { stationCode });
+    void recordLocationFix('unlock');
     const startedAt = Date.now();
     attemptId.current ??= defaultUUID();
     setState({ phase: 'requesting' });
@@ -155,7 +183,7 @@ export function useUnlock(stationCode: string) {
         reason,
         message: FAILURE_COPY[reason] ?? (error as Error).message ?? FAILURE_COPY.network,
       });
-      refreshAfter();
+      refreshAfter(stationCode);
       return;
     }
 
@@ -170,7 +198,7 @@ export function useUnlock(stationCode: string) {
     }
     if (!alive.current) return;
     attemptId.current = null;
-    refreshAfter();
+    refreshAfter(stationCode);
 
     if (rental.status === 'ACTIVE') {
       tracker.track('unlock_result', {
@@ -194,8 +222,89 @@ export function useUnlock(stationCode: string) {
       reason: rental.status,
       message: FAILURE_COPY[rental.status] ?? FAILURE_COPY.UNLOCK_FAILED,
     });
-  }, [refreshAfter, session, stationCode]);
+  }, [defaultCode, refreshAfter, session]);
 
   const reset = useCallback(() => setState({ phase: 'idle' }), []);
   return { state, unlock, reset };
+}
+
+const LOST_FEE_TIMEOUT_MS = 30_000;
+
+export type LostFeeState =
+  | { phase: 'idle' }
+  | { phase: 'preparing' }
+  | { phase: 'paying' }
+  | { phase: 'confirming' }
+  | { phase: 'paid' }
+  | { phase: 'error'; message: string };
+
+const LOST_FEE_COPY: Record<string, string> = {
+  NOT_OUT: 'This power bank is already settled.',
+  stripe_not_configured: 'Payments are not set up in this build.',
+  unsupported_platform: 'Get the CUUB app to pay for a lost power bank.',
+};
+
+/**
+ * Pays the lost power bank fee on an open membership rental: PaymentSheet for
+ * the buyout, then asks the server again until it's settled and unlocking is open.
+ */
+export function usePayLostPowerBank() {
+  const session = useAuthStore((s) => s.session);
+  const queryClient = useQueryClient();
+  const checkout = useLostPowerBankCheckout();
+  const [state, setState] = useState<LostFeeState>({ phase: 'idle' });
+
+  const pay = useCallback(
+    async (rentalId: string): Promise<boolean> => {
+      if (!session) return false;
+      const fail = (code: string | undefined, fallback?: string) => {
+        setState({
+          phase: 'error',
+          message: (code && LOST_FEE_COPY[code]) || fallback || 'Payment did not go through. Try again.',
+        });
+        return false;
+      };
+      setState({ phase: 'preparing' });
+
+      let current: BuyoutCheckout;
+      try {
+        current = await checkoutBuyout(session.token, rentalId);
+      } catch (error) {
+        return fail(error instanceof ApiError ? error.code : undefined, (error as Error)?.message);
+      }
+
+      if (current.status === 'requires_payment') {
+        setState({ phase: 'paying' });
+        const outcome = await checkout(current, { name: session.user.name, phone: session.user.phone });
+        if (outcome.result === 'canceled') {
+          setState({ phase: 'idle' });
+          return false;
+        }
+        if (outcome.result === 'failed') return fail(outcome.errorCode, outcome.message);
+      }
+
+      setState({ phase: 'confirming' });
+      const deadline = Date.now() + LOST_FEE_TIMEOUT_MS;
+      while (current.status !== 'paid' && Date.now() < deadline) {
+        try {
+          current = await checkoutBuyout(session.token, rentalId);
+        } catch {
+          // keep asking until the deadline
+        }
+        if (current.status !== 'paid') await sleep(POLL_MS);
+      }
+
+      void queryClient.invalidateQueries({ queryKey: activeRentalKey(session.user.userId) });
+      void queryClient.invalidateQueries({ queryKey: ['station-by-code'] });
+      if (current.status !== 'paid') {
+        return fail(undefined, 'Payment received. It can take a minute before you can unlock again.');
+      }
+      setState({ phase: 'paid' });
+      return true;
+    },
+    [checkout, queryClient, session],
+  );
+
+  const reset = useCallback(() => setState({ phase: 'idle' }), []);
+  return { state, pay, reset };
 }

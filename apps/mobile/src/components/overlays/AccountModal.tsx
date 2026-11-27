@@ -102,11 +102,10 @@ export function AccountModal({
           <View style={styles.content}>
             {signedIn ? (
               <PostHogMaskView style={styles.details}>
-                {name ? <Text style={styles.phone}>{name}</Text> : null}
-                <Text muted style={styles.label}>
-                  {name ? 'Phone number' : 'Your phone number'}
-                </Text>
-                <Text style={name ? styles.secondary : styles.phone}>{phone || '—'}</Text>
+                <View>
+                  {name ? <Text style={styles.phone}>{name}</Text> : null}
+                  <Text style={name ? styles.secondary : styles.phone}>{phone || '—'}</Text>
+                </View>
                 {!profileComplete && onCompleteProfile ? (
                   <Pressable
                     accessibilityRole="button"
@@ -115,7 +114,7 @@ export function AccountModal({
                   >
                     <Text variant="subtitle">Complete your profile</Text>
                     <Text variant="caption" muted>
-                      Add your name and date of birth to unlock power banks.
+                      Add your name and age to unlock power banks.
                     </Text>
                   </Pressable>
                 ) : null}
@@ -154,27 +153,32 @@ export function AccountModal({
                   Support
                 </Text>
               </Pressable>
+              {signedIn ? (
+                <>
+                  <Text variant="caption" muted>
+                    ·
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={deleting}
+                    onPress={confirmDelete}
+                    style={deleting && styles.deleteDisabled}
+                  >
+                    {deleting ? (
+                      <ActivityIndicator size="small" color={colors.muted} />
+                    ) : (
+                      <Text variant="caption" muted>
+                        Delete account
+                      </Text>
+                    )}
+                  </Pressable>
+                </>
+              ) : null}
             </View>
             {signedIn ? (
-              <>
-                <Button label="Log out" variant="neutral" onPress={onLogout} />
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={deleting}
-                  onPress={confirmDelete}
-                  style={[styles.deleteButton, deleting && styles.deleteDisabled]}
-                >
-                  {deleting ? (
-                    <ActivityIndicator color={colors.danger} />
-                  ) : (
-                    <Text variant="button" color="rgba(255,69,58,0.55)">
-                      Delete account
-                    </Text>
-                  )}
-                </Pressable>
-              </>
+              <Button label="Log out" variant="neutral" onPress={onLogout} style={styles.mainButton} />
             ) : (
-              <Button label="Log in" variant="neutral" onPress={onLogin} />
+              <Button label="Log in" variant="neutral" onPress={onLogin} style={styles.mainButton} />
             )}
           </View>
         </View>
@@ -232,8 +236,8 @@ const styles = StyleSheet.create({
   },
   secondary: {
     color: colors.white,
-    fontSize: 17,
-    lineHeight: 24,
+    fontSize: 20,
+    lineHeight: 26,
   },
   details: {
     gap: spacing[2],
@@ -248,7 +252,7 @@ const styles = StyleSheet.create({
     gap: spacing[1],
   },
   membership: {
-    marginTop: spacing[5],
+    marginTop: spacing[6],
   },
   legalRow: {
     flexDirection: 'row',
@@ -261,11 +265,10 @@ const styles = StyleSheet.create({
   actions: {
     gap: spacing[3],
   },
-  deleteButton: {
-    minHeight: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.button,
+  /** Same outer size and corners as the map's Scan and Directions buttons. */
+  mainButton: {
+    minHeight: 60,
+    borderRadius: radius.button + 4,
   },
   deleteDisabled: {
     opacity: 0.45,

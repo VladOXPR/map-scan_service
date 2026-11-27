@@ -1,14 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  Image,
-  KeyboardAvoidingView,
-  Linking,
-  Platform,
-  Pressable,
-  StyleSheet,
-  View,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { KeyboardAvoidingView, Linking, Platform, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Controller, useForm } from 'react-hook-form';
@@ -20,15 +11,12 @@ import {
   normalizePhone,
   requestSmsCode,
 } from '@/features/auth/api';
+import { AuthHero } from '@/features/auth/AuthHero';
 import { safeNext } from '@/features/auth/routes';
 import { tracker } from '@/lib/analytics';
 import { ApiError } from '@/lib/apiClient';
 import { getPrivacyPolicyUrl, getTermsUrl } from '@/lib/config';
 import { colors, spacing } from '@/theme';
-
-const stationCover = require('../../assets/illustrations/StationCover.png');
-
-const HERO_GRADIENT = ['#22B1F7', '#1F67E0'] as const;
 
 const schema = z.object({
   phone: z
@@ -90,29 +78,7 @@ export default function PhoneScreen() {
 
   return (
     <View style={styles.root}>
-      <View style={styles.hero}>
-        <LinearGradient
-          colors={[...HERO_GRADIENT]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={[styles.heroGradient, { paddingTop: insets.top }]}
-        >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            onPress={onClose}
-            style={[styles.closeButton, { top: insets.top + spacing[2] }]}
-            hitSlop={8}
-          >
-            <Text style={styles.closeIcon}>×</Text>
-          </Pressable>
-          <Image
-            source={stationCover}
-            style={styles.heroImage}
-            resizeMode="contain"
-          />
-        </LinearGradient>
-      </View>
+      <AuthHero onClose={onClose} />
 
       <KeyboardAvoidingView
         style={styles.panel}
@@ -125,7 +91,7 @@ export default function PhoneScreen() {
             { paddingBottom: Math.max(insets.bottom, spacing[5]) },
           ]}
         >
-          <Text style={styles.headline}>Whats your number 😉</Text>
+          <Text style={styles.headline}>Whats your number</Text>
 
           <Controller
             control={control}
@@ -194,38 +160,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#000000',
-  },
-  hero: {
-    flex: 1,
-  },
-  heroGradient: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeButton: {
-    position: 'absolute',
-    left: spacing[5],
-    zIndex: 2,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.28)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeIcon: {
-    color: colors.white,
-    fontSize: 28,
-    lineHeight: 30,
-    fontWeight: '400',
-    marginTop: -1,
-  },
-  heroImage: {
-    width: '72%',
-    height: '78%',
   },
   panel: {
     flex: 2,
